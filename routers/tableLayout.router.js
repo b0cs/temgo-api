@@ -9,7 +9,6 @@ import {
 
 const tableLayoutRouter = express.Router();
 
-tableLayoutRouter.get('/tables/available', findAvailableTable);
 
 // POST route to create a new table layout
 tableLayoutRouter.post('/', createLayout);
