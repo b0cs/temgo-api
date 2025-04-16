@@ -32,6 +32,7 @@ export const createMember = async (req, res) => {
 
 export const getMembersByCluster = async (req, res) => {
     const { clusterId } = req.params; 
+    console.log("clusterId", clusterId);
     try {
         const members = await Member.find({ cluster: clusterId });
         res.status(200).json(members);

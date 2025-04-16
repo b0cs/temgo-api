@@ -42,9 +42,10 @@ export const addService = async (req, res) => {
 
 // Récupérer tous les services
 export const getServices = async (req, res) => {
+    const { clusterId } = req.params;
     try {
         // Récupérer tous les services de la base de données
-        const services = await Service.find();
+        const services = await Service.find(clusterId);
 
 
         // Répondre avec les services récupérés
