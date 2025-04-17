@@ -5,16 +5,20 @@ import memberRouter from './member.router.js';
 import appointmentRouter from './appointment.router.js';
 import tableLayoutRouter from './tableLayout.router.js';
 import tableRouter from './table.router.js';
+import authRouter from './auth.router.js';
 
 const router = express.Router();
 
-// Add more router imports here if needed
+// Routes d'authentification
+router.use('/auth', authRouter);
 
+// Autres routes
 router.use('/service', serviceRouter);
 router.use('/appointment', appointmentRouter);
 router.use("/member", memberRouter);
 router.use('/cluster', clusterRouter);
 router.use('/table-layout', tableLayoutRouter);
-router.use('table', tableRouter);
+router.use('/table', tableRouter);
+
 export default router;
 

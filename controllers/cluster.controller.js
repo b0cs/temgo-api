@@ -92,4 +92,25 @@ export const getAllServices = async (req, res) => {
     }
 };
 
+// Contrôleur pour récupérer tous les services par cluster ID (fonction manquante)
+export const getServicesByCluster = async (req, res) => {
+    try {
+        // Récupérer l'ID du cluster à partir des paramètres de la requête
+        const { clusterId } = req.params;
+        // Rechercher le cluster correspondant à l'ID
+        const cluster = await Cluster.findById(clusterId);
+        // Vérifier si le cluster existe
+        if (!cluster) {
+            return res.status(404).json({ error: "Cluster not found" });
+        }
+        // Récupérer tous les services du cluster
+        const services = cluster.services;
+        // Répondre avec les services récupérés
+        res.status(200).json(services);
+    } catch (error) {
+        // Gérer les erreurs
+        res.status(500).json({ error: error.message });
+    }
+};
+
 
