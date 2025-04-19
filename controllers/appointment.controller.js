@@ -5,6 +5,7 @@ import Service from '../models/service.model.js';
 import Table from '../models/table.model.js';
 import TableLayout from '../models/tableLayout.model.js'; 
 import { ApiException } from '../exceptions/ApiException.js';
+import User from "../models/user.model.js";
 
 /**
  * Créer un rendez-vous
@@ -31,7 +32,7 @@ export const bookAppointment = async (req, res) => {
             return res.status(404).json({ message: 'Service not found' });
         }
 
-        const duration = service.duration || 30; // Utiliser une durée par défaut si non spécifiée
+        const duration = service.duration || 30; // Utiliser une durée par défaut 
         const end = new Date(start.getTime() + duration * 60000);
 
         // Vérifier s'il y a des conflits d'horaire pour l'employé assigné
@@ -125,7 +126,7 @@ export const getAllAppointments = async (req, res) => {
       let employeeDetails = null;
       if (appointment.employee) {
           try {
-              const employee = await mongoose.model('User').findById(appointment.employee).lean();
+              const employee = await User.findById(appointment.employee).lean();
               if (employee) {
                   employeeDetails = {
                       _id: employee._id,
@@ -240,13 +241,46 @@ export const getAppointmentsByMember = async (req, res) => {
     const { memberId } = req.params; // Assurez-vous que l'ID du membre est passé en paramètre de l'URL
 
     try {
+        console.log(`Recherche des rendez-vous pour le membre ${memberId}`);
+        
+        if (!memberId) {
+            return res.status(400).json({ message: 'ID du membre non fourni' });
+        }
+        
+        // Vérifier si l'ID est un ObjectId valide
+        if (!mongoose.Types.ObjectId.isValid(memberId)) {
+            return res.status(400).json({ message: 'ID du membre invalide' });
+        }
+        
+        // Récupérer les rendez-vous avec populate pour avoir les détails du service et de l'employé
+        console.log(`Exécution de la requête: Appointment.find({ member: ${memberId} })`);
+        
+        // Recherche de tous les rendez-vous du membre, sans filtre de date
         const appointments = await Appointment.find({ member: memberId })
-            .populate('cluster', 'name location') // Sélection spécifique des champs pour cluster
-            .populate('service', 'name description')
-            .populate('member', 'firstName lastName email'); // Sélection spécifique des champs pour member
+            .populate('service', 'name description price duration color')
+            .populate('employee', 'firstName lastName role')
+            .sort({ startTime: -1 }); // Du plus récent au plus ancien
+            
+        console.log(`${appointments.length} rendez-vous trouvés pour le membre ${memberId}`);
+        
+        // Afficher plus de détails pour le débogage
+        if (appointments.length > 0) {
+            console.log(`Premier rendez-vous: ${JSON.stringify({
+                id: appointments[0]._id,
+                startTime: appointments[0].startTime,
+                service: appointments[0].service ? appointments[0].service.name : 'Aucun service',
+                employee: appointments[0].employee ? `${appointments[0].employee.firstName} ${appointments[0].employee.lastName}` : 'Non assigné'
+            })}`);
+        }
+        
         res.status(200).json(appointments);
     } catch (error) {
-        res.status(500).json({ message: 'Error retrieving appointments: ' + error.message });
+        console.error(`Erreur détaillée lors de la récupération des rendez-vous du membre ${memberId}:`, error);
+        res.status(500).json({ 
+            message: 'Erreur lors de la récupération des rendez-vous', 
+            error: error.message,
+            stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+        });
     }
 };
 
@@ -320,7 +354,7 @@ export const getAllAppointmentsByDay = async (req, res) => {
             let employeeDetails = null;
             if (appointment.employee) {
                 try {
-                    const employee = await mongoose.model('User').findById(appointment.employee).lean();
+                    const employee = await User.findById(appointment.employee).lean();
                     if (employee) {
                         employeeDetails = {
                             _id: employee._id,
@@ -441,8 +475,8 @@ export const assignEmployeeToAppointment = async (req, res) => {
             return res.status(404).json({ message: 'Rendez-vous non trouvé' });
         }
 
-        // Vérifier si l'employé existe
-        const employee = await mongoose.model('User').findById(employeeId);
+        // Vérifier que l'employé existe
+        const employee = await User.findById(employeeId);
         if (!employee) {
             return res.status(404).json({ message: 'Employé non trouvé' });
         }
@@ -450,6 +484,31 @@ export const assignEmployeeToAppointment = async (req, res) => {
         // Vérifier si l'employé appartient au même cluster que le rendez-vous
         if (employee.cluster && employee.cluster.toString() !== appointment.cluster.toString()) {
             return res.status(403).json({ message: 'L\'employé n\'appartient pas à ce salon/cluster' });
+        }
+        
+        // Vérifier si l'employé est disponible (nouveau)
+        if (employee.isAvailable === false) {
+            return res.status(400).json({ 
+                message: 'Cet employé est indisponible et ne peut pas être assigné à un rendez-vous',
+                isAvailable: false,
+                absenceStartDate: employee.absenceStartDate,
+                absenceEndDate: employee.absenceEndDate,
+                absenceReason: employee.absenceReason
+            });
+        }
+
+        // S'il y a des dates d'absence, vérifier si le rendez-vous est pendant cette période
+        if (employee.absenceStartDate && employee.absenceEndDate) {
+            const appointmentDate = new Date(appointment.startTime);
+            if (appointmentDate >= employee.absenceStartDate && appointmentDate <= employee.absenceEndDate) {
+                return res.status(400).json({ 
+                    message: 'Cet employé est en absence à cette date et ne peut pas être assigné à ce rendez-vous',
+                    isAvailable: false,
+                    absenceStartDate: employee.absenceStartDate,
+                    absenceEndDate: employee.absenceEndDate,
+                    absenceReason: employee.absenceReason
+                });
+            }
         }
 
         // Mettre à jour le rendez-vous avec l'ID de l'employé en préservant tous les autres champs
@@ -472,7 +531,8 @@ export const assignEmployeeToAppointment = async (req, res) => {
             _id: employee._id,
             firstName: employee.firstName || '',
             lastName: employee.lastName || '',
-            role: employee.role || 'employee'
+            role: employee.role || 'employee',
+            isAvailable: employee.isAvailable
         };
         
         res.status(200).json({ 
@@ -498,24 +558,67 @@ export const assignEmployeeToAppointment = async (req, res) => {
 export const getStaffByCluster = async (req, res) => {
     const { clusterId } = req.params;
 
+    console.log("🔍 Recherche de staff pour le cluster:", clusterId);
+
     if (!clusterId) {
         return res.status(400).json({ message: 'L\'ID du cluster est requis' });
     }
 
     try {
-        // Récupérer tous les utilisateurs avec le rôle employee ou manager qui appartiennent au cluster
-        const staff = await mongoose.model('User').find({ 
-            cluster: clusterId,
+        // Récupérer directement dans la collection users
+        console.log("📊 Requête de recherche dans la collection users: { cluster: ", clusterId, ", role: { $in: ['employee', 'manager', 'admin'] } }");
+        
+        const userStaff = await mongoose.connection.db.collection('users').find({ 
+            cluster: new mongoose.Types.ObjectId(clusterId),
             role: { $in: ['employee', 'manager', 'admin'] }
-        }).select('_id firstName lastName email role');
+        }).toArray();
 
-        if (staff.length === 0) {
+        console.log("🧑‍💼 Nombre de staffs trouvés dans users:", userStaff.length);
+        
+        // Récupérer également dans la collection staffs
+        console.log("📊 Requête de recherche dans la collection staffs: { cluster: ", clusterId, "}");
+        
+        const staffCollection = await mongoose.connection.db.collection('staffs').find({ 
+            cluster: new mongoose.Types.ObjectId(clusterId)
+        }).toArray();
+        
+        console.log("🧑‍💼 Nombre de staffs trouvés dans staffs:", staffCollection.length);
+        
+        // Combiner les résultats
+        let combinedStaff = [...userStaff];
+        
+        // Ajouter les staffs de la collection staffs s'ils n'existent pas déjà dans users
+        for (const staff of staffCollection) {
+            const exists = userStaff.some(user => user.email === staff.email);
+            if (!exists) {
+                combinedStaff.push(staff);
+            }
+        }
+        
+        console.log("🧑‍💼 Nombre total de staffs combinés:", combinedStaff.length);
+        
+        // Formater la réponse pour correspondre à ce qu'attend le client
+        const formattedStaff = combinedStaff.map(s => ({
+            _id: s._id.toString(),
+            email: s.email,
+            firstName: s.firstName,
+            lastName: s.lastName,
+            role: s.role || 'employee',
+            isAvailable: s.isAvailable !== false, // Si non défini ou true, considérer comme disponible
+            absenceStartDate: s.absenceStartDate,
+            absenceEndDate: s.absenceEndDate,
+            absenceReason: s.absenceReason
+        }));
+        
+        console.log("📋 Liste des staffs combinés:", JSON.stringify(formattedStaff, null, 2));
+
+        if (formattedStaff.length === 0) {
             return res.status(404).json({ message: 'Aucun staff trouvé pour ce cluster' });
         }
 
-        res.status(200).json(staff);
+        res.status(200).json(formattedStaff);
     } catch (error) {
-        console.error('Erreur lors de la récupération du staff:', error);
+        console.error('❌ Erreur lors de la récupération du staff:', error);
         res.status(500).json({ message: 'Erreur lors de la récupération du staff: ' + error.message });
     }
 };

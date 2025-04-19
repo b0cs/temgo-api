@@ -6,19 +6,33 @@ import appointmentRouter from './appointment.router.js';
 import tableLayoutRouter from './tableLayout.router.js';
 import tableRouter from './table.router.js';
 import authRouter from './auth.router.js';
+import reviewRouter from './review.router.js';
 
 const router = express.Router();
 
 // Routes d'authentification
 router.use('/auth', authRouter);
 
-// Autres routes
+// Routes pour les services
 router.use('/service', serviceRouter);
+
+// Routes pour les rendez-vous
 router.use('/appointment', appointmentRouter);
-router.use("/member", memberRouter);
+
+// Routes pour les clusters
 router.use('/cluster', clusterRouter);
-router.use('/table-layout', tableLayoutRouter);
+
+// Routes pour les membres
+router.use('/member', memberRouter);
+
+// Routes pour les avis
+router.use('/reviews', reviewRouter);
+
+// Routes pour les tables
 router.use('/table', tableRouter);
+
+// Routes pour les layouts de tables
+router.use('/tableLayout', tableLayoutRouter);
 
 export default router;
 

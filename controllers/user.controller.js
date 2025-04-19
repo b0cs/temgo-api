@@ -1,5 +1,6 @@
 import User from '../models/user.model.js';
 import Appointment from '../models/appointment.model.js';
+import mongoose from 'mongoose';
 
 /**
  * Récupère tous les staffs (employés et managers) d'un cluster
@@ -8,22 +9,81 @@ export const getStaffsByCluster = async (req, res) => {
     try {
         const { clusterId } = req.params;
         
+        console.log("🔍 Recherche de staff pour le cluster:", clusterId);
+        
         if (!clusterId) {
             return res.status(400).json({ message: 'ID du cluster requis' });
         }
         
-        // Récupérer tous les staffs qui sont des employés ou des managers
-        const staffs = await User.find({
-            cluster: clusterId,
-            role: { $in: ['employee', 'manager'] },
-            isActive: true
-        }).select('-password -permissions -resetPasswordToken -resetPasswordExpires');
+        // Récupérer directement dans la collection users
+        console.log("📊 Requête de recherche dans la collection users: { cluster: ", clusterId, ", role: { $in: ['employee', 'manager'] } }");
         
-        if (staffs.length === 0) {
+        const userStaff = await mongoose.connection.db.collection('users').find({ 
+            cluster: new mongoose.Types.ObjectId(clusterId),
+            role: { $in: ['employee', 'manager', 'admin'] },
+            isActive: true
+        }).toArray();
+
+        console.log("🧑‍💼 Nombre de staffs trouvés dans users:", userStaff.length);
+        
+        // Récupérer également dans la collection staffs
+        console.log("📊 Requête de recherche dans la collection staffs: { cluster: ", clusterId, "}");
+        
+        const staffCollection = await mongoose.connection.db.collection('staffs').find({ 
+            cluster: new mongoose.Types.ObjectId(clusterId)
+        }).toArray();
+        
+        console.log("🧑‍💼 Nombre de staffs trouvés dans staffs:", staffCollection.length);
+        
+        // Récupérer également dans la collection members (nouveaux employés)
+        console.log("📊 Requête de recherche dans la collection members: { cluster: ", clusterId, ", role: { $ne: 'client' } }");
+        
+        const memberStaff = await mongoose.connection.db.collection('members').find({ 
+            cluster: new mongoose.Types.ObjectId(clusterId),
+            role: { $ne: 'client' } // Tous sauf les clients
+        }).toArray();
+        
+        console.log("🧑‍💼 Nombre de staffs trouvés dans members:", memberStaff.length);
+        
+        // Combiner les résultats
+        let combinedStaff = [...userStaff];
+        
+        // Ajouter les staffs de la collection staffs s'ils n'existent pas déjà
+        for (const staff of staffCollection) {
+            const exists = combinedStaff.some(user => user.email === staff.email);
+            if (!exists) {
+                combinedStaff.push(staff);
+            }
+        }
+        
+        // Ajouter les staffs de la collection members s'ils n'existent pas déjà
+        for (const staff of memberStaff) {
+            const exists = combinedStaff.some(user => user.email === staff.email);
+            if (!exists) {
+                combinedStaff.push(staff);
+            }
+        }
+        
+        console.log("🧑‍💼 Nombre total de staffs combinés:", combinedStaff.length);
+        
+        // Formater la réponse pour correspondre à ce qu'attend le client
+        const formattedStaff = combinedStaff.map(s => ({
+            _id: s._id.toString(),
+            email: s.email,
+            firstName: s.firstName,
+            lastName: s.lastName,
+            role: s.role || 'employee',
+            phone: s.phone,
+            isAvailable: s.isAvailable !== false // Par défaut disponible si le champ n'est pas défini
+        }));
+        
+        console.log("📋 Liste des staffs combinés:", JSON.stringify(formattedStaff, null, 2));
+        
+        if (formattedStaff.length === 0) {
             return res.status(404).json({ message: 'Aucun staff trouvé pour ce cluster' });
         }
         
-        res.status(200).json(staffs);
+        res.status(200).json(formattedStaff);
     } catch (error) {
         console.error('Erreur dans getStaffsByCluster:', error);
         res.status(500).json({ message: 'Erreur lors de la récupération des staffs', error: error.message });
@@ -161,7 +221,7 @@ export const updateStaffDetails = async (req, res) => {
 export const updateStaffAvailability = async (req, res) => {
     try {
         const { staffId } = req.params;
-        const { isAvailable, absenceStartDate, absenceEndDate, absenceReason } = req.body;
+        const { isAvailable, absenceStartDate, absenceEndDate, absenceReason, isIndefinite } = req.body;
         
         if (!staffId) {
             return res.status(400).json({ message: 'ID du staff requis' });
@@ -180,9 +240,28 @@ export const updateStaffAvailability = async (req, res) => {
         // Mise à jour de la disponibilité
         staff.isAvailable = isAvailable;
         
-        if (absenceStartDate) staff.absenceStartDate = new Date(absenceStartDate);
-        if (absenceEndDate) staff.absenceEndDate = new Date(absenceEndDate);
-        if (absenceReason) staff.absenceReason = absenceReason;
+        // Réinitialiser les champs d'absence si le staff est disponible
+        if (isAvailable) {
+            staff.absenceStartDate = undefined;
+            staff.absenceEndDate = undefined;
+            staff.absenceReason = undefined;
+            staff.isIndefinite = false;
+        } else {
+            // Gérer l'absence indéfinie
+            if (isIndefinite) {
+                staff.isIndefinite = true;
+                // Si l'absence est indéfinie, on ne définit pas de dates
+                staff.absenceStartDate = new Date(); // Date actuelle comme début
+                staff.absenceEndDate = undefined;
+            } else {
+                staff.isIndefinite = false;
+                // Sinon, on utilise les dates fournies
+                if (absenceStartDate) staff.absenceStartDate = new Date(absenceStartDate);
+                if (absenceEndDate) staff.absenceEndDate = new Date(absenceEndDate);
+            }
+            
+            if (absenceReason) staff.absenceReason = absenceReason;
+        }
         
         await staff.save();
         
@@ -195,7 +274,8 @@ export const updateStaffAvailability = async (req, res) => {
                 isAvailable: staff.isAvailable,
                 absenceStartDate: staff.absenceStartDate,
                 absenceEndDate: staff.absenceEndDate,
-                absenceReason: staff.absenceReason
+                absenceReason: staff.absenceReason,
+                isIndefinite: staff.isIndefinite
             }
         });
     } catch (error) {
@@ -250,5 +330,99 @@ export const updateAppointmentStatus = async (req, res) => {
     } catch (error) {
         console.error('Erreur dans updateAppointmentStatus:', error);
         res.status(500).json({ message: 'Erreur lors de la mise à jour du statut du rendez-vous', error: error.message });
+    }
+};
+
+/**
+ * Vérifie si un staff a des rendez-vous en cours ou futurs
+ */
+export const checkStaffAppointments = async (req, res) => {
+    try {
+        const { staffId } = req.params;
+        
+        if (!staffId) {
+            return res.status(400).json({ message: 'ID du staff requis' });
+        }
+        
+        // Vérifier si le staff existe
+        const staff = await User.findById(staffId);
+        if (!staff) {
+            return res.status(404).json({ message: 'Staff non trouvé' });
+        }
+        
+        // Date actuelle
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Début de la journée
+        
+        // Rechercher les rendez-vous où ce staff est assigné
+        const appointments = await mongoose.model('Appointment').find({
+            employee: staffId,
+            startTime: { $gte: today }
+        }).sort({ startTime: 1 });
+        
+        const hasAppointments = appointments.length > 0;
+        
+        res.status(200).json({
+            hasAppointments,
+            appointmentsCount: appointments.length,
+            appointments: hasAppointments ? appointments : []
+        });
+    } catch (error) {
+        console.error('Erreur dans checkStaffAppointments:', error);
+        res.status(500).json({ message: 'Erreur lors de la vérification des rendez-vous', error: error.message });
+    }
+};
+
+/**
+ * Supprime un staff après vérification des rendez-vous
+ */
+export const deleteStaff = async (req, res) => {
+    try {
+        const { staffId } = req.params;
+        const { force = false } = req.query; // option pour forcer la suppression malgré les rendez-vous
+        
+        if (!staffId) {
+            return res.status(400).json({ message: 'ID du staff requis' });
+        }
+        
+        // Vérifier si le staff existe
+        const staff = await User.findById(staffId);
+        if (!staff) {
+            return res.status(404).json({ message: 'Staff non trouvé' });
+        }
+        
+        // Vérifier les permissions (seuls les admins et managers peuvent supprimer des staffs)
+        if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+            return res.status(403).json({ message: 'Vous n\'avez pas les permissions pour supprimer un staff' });
+        }
+        
+        // Vérifier si l'utilisateur a des rendez-vous en cours ou futurs
+        if (!force) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Début de la journée
+            
+            const appointments = await mongoose.model('Appointment').find({
+                employee: staffId,
+                startTime: { $gte: today }
+            }).limit(5); // Limiter à 5 pour ne pas surcharger la réponse
+            
+            if (appointments.length > 0) {
+                return res.status(409).json({
+                    message: 'Cet employé a des rendez-vous en cours ou programmés. Veuillez réassigner ces rendez-vous avant de supprimer cet employé.',
+                    appointmentsCount: appointments.length,
+                    appointments
+                });
+            }
+        }
+        
+        // Supprimer l'utilisateur
+        await User.findByIdAndDelete(staffId);
+        
+        res.status(200).json({
+            message: 'Staff supprimé avec succès'
+        });
+    } catch (error) {
+        console.error('Erreur dans deleteStaff:', error);
+        res.status(500).json({ message: 'Erreur lors de la suppression du staff', error: error.message });
     }
 }; 

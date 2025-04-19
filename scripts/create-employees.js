@@ -1,143 +1,94 @@
 import mongoose from 'mongoose';
-import User from '../models/user.model.js';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Connexion à MongoDB
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/temgo')
-  .then(() => console.log('Connecté à MongoDB'))
-  .catch(err => {
-    console.error('Erreur de connexion MongoDB:', err);
-    process.exit(1);
-  });
-
-const createEmployees = async () => {
-  try {
-    // ID du cluster (celui que vous utilisez actuellement dans l'application)
-    // Remplacez par l'ID de votre cluster
-    const clusterId = "67ff7963a05ffbb0f61f8d5f"; // À remplacer par l'ID réel du cluster
+// Connexion à la base de données
+mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://admin:cTDJ7cfyJtCIX80c@cluster0.5ctlh.mongodb.net/poctemgo')
+  .then(async () => {
+    console.log('Connexion à MongoDB établie');
     
-    // Liste des employés à créer
+    // Récupérer le cluster de l'administrateur
+    const db = mongoose.connection.db;
+    const admin = await db.collection('users').findOne({ email: 'admin@temgo.com' });
+    
+    if (!admin) {
+      console.error('Utilisateur admin@temgo.com non trouvé');
+      process.exit(1);
+    }
+    
+    const clusterId = admin.cluster;
+    console.log(`Cluster ID trouvé : ${clusterId}`);
+    
+    // Créer deux nouveaux employés
+    const hashedPassword = await bcrypt.hash('password123', 10);
+    
     const employees = [
       {
-        firstName: "Marie",
-        lastName: "Dubois",
-        email: "marie.dubois@temgo.com",
-        phone: "0611223344",
-        role: "employee",
-        specialties: [],
-        // Défini pour des tests de disponibilité variés
-        workHours: [
-          { day: 'monday', isWorking: true, startTime: '08:30', endTime: '17:30' },
-          { day: 'tuesday', isWorking: true, startTime: '08:30', endTime: '17:30' },
-          { day: 'wednesday', isWorking: true, startTime: '08:30', endTime: '17:30' },
-          { day: 'thursday', isWorking: true, startTime: '08:30', endTime: '17:30' },
-          { day: 'friday', isWorking: true, startTime: '08:30', endTime: '17:30' },
-          { day: 'saturday', isWorking: false },
-          { day: 'sunday', isWorking: false }
-        ]
+        email: 'employee1@temgo.com',
+        password: hashedPassword,
+        firstName: 'Employé',
+        lastName: 'Un',
+        role: 'employee',
+        cluster: new mongoose.Types.ObjectId(clusterId),
+        isActive: true,
+        permissions: {
+          canManageEmployees: false,
+          canManageServices: false,
+          canManageAppointments: true,
+          canViewReports: false,
+          canManageSettings: false
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
       },
       {
-        firstName: "Thomas",
-        lastName: "Martin",
-        email: "thomas.martin@temgo.com",
-        phone: "0622334455",
-        role: "employee",
-        specialties: [],
-        workHours: [
-          { day: 'monday', isWorking: true, startTime: '09:00', endTime: '18:00' },
-          { day: 'tuesday', isWorking: true, startTime: '09:00', endTime: '18:00' },
-          { day: 'wednesday', isWorking: true, startTime: '09:00', endTime: '18:00' },
-          { day: 'thursday', isWorking: true, startTime: '09:00', endTime: '18:00' },
-          { day: 'friday', isWorking: true, startTime: '09:00', endTime: '18:00' },
-          { day: 'saturday', isWorking: true, startTime: '09:00', endTime: '14:00' },
-          { day: 'sunday', isWorking: false }
-        ]
-      },
-      {
-        firstName: "Sophie",
-        lastName: "Bernard",
-        email: "sophie.bernard@temgo.com",
-        phone: "0633445566",
-        role: "employee",
-        specialties: [],
-        workHours: [
-          { day: 'monday', isWorking: false },
-          { day: 'tuesday', isWorking: true, startTime: '10:00', endTime: '19:00' },
-          { day: 'wednesday', isWorking: true, startTime: '10:00', endTime: '19:00' },
-          { day: 'thursday', isWorking: true, startTime: '10:00', endTime: '19:00' },
-          { day: 'friday', isWorking: true, startTime: '10:00', endTime: '19:00' },
-          { day: 'saturday', isWorking: true, startTime: '10:00', endTime: '17:00' },
-          { day: 'sunday', isWorking: false }
-        ]
-      },
-      {
-        firstName: "Lucas",
-        lastName: "Petit",
-        email: "lucas.petit@temgo.com",
-        phone: "0644556677",
-        role: "employee",
-        specialties: [],
-        workHours: [
-          { day: 'monday', isWorking: true, startTime: '09:30', endTime: '18:30' },
-          { day: 'tuesday', isWorking: true, startTime: '09:30', endTime: '18:30' },
-          { day: 'wednesday', isWorking: true, startTime: '09:30', endTime: '18:30' },
-          { day: 'thursday', isWorking: true, startTime: '09:30', endTime: '18:30' },
-          { day: 'friday', isWorking: true, startTime: '09:30', endTime: '18:30' },
-          { day: 'saturday', isWorking: false },
-          { day: 'sunday', isWorking: false }
-        ],
-        lunchStart: "13:00", 
-        lunchEnd: "14:00"
-      },
-      {
-        firstName: "Emma",
-        lastName: "Robert",
-        email: "emma.robert@temgo.com",
-        phone: "0655667788",
-        role: "manager", // Un manager pour tester les permissions
-        specialties: [],
-        workHours: [
-          { day: 'monday', isWorking: true, startTime: '08:00', endTime: '17:00' },
-          { day: 'tuesday', isWorking: true, startTime: '08:00', endTime: '17:00' },
-          { day: 'wednesday', isWorking: true, startTime: '08:00', endTime: '17:00' },
-          { day: 'thursday', isWorking: true, startTime: '08:00', endTime: '17:00' },
-          { day: 'friday', isWorking: true, startTime: '08:00', endTime: '17:00' },
-          { day: 'saturday', isWorking: false },
-          { day: 'sunday', isWorking: false }
-        ]
+        email: 'employee2@temgo.com',
+        password: hashedPassword,
+        firstName: 'Employé',
+        lastName: 'Deux',
+        role: 'employee',
+        cluster: new mongoose.Types.ObjectId(clusterId),
+        isActive: true,
+        permissions: {
+          canManageEmployees: false,
+          canManageServices: false,
+          canManageAppointments: true,
+          canViewReports: false,
+          canManageSettings: false
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
     ];
-
-    // Mot de passe commun pour tous les employés (pour faciliter les tests)
-    const password = "Temgo2024";
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Créer les employés dans la base de données
+    
+    // Vérifier si les employés existent déjà
     for (const employee of employees) {
-      const newEmployee = new User({
-        ...employee,
-        password: hashedPassword,
-        cluster: clusterId
-      });
-
-      await newEmployee.save();
-      console.log(`Employé créé: ${employee.firstName} ${employee.lastName}`);
+      const existingEmployee = await db.collection('users').findOne({ email: employee.email });
+      
+      if (existingEmployee) {
+        console.log(`L'employé ${employee.email} existe déjà.`);
+      } else {
+        await db.collection('users').insertOne(employee);
+        console.log(`Employé ${employee.email} créé avec succès.`);
+      }
     }
-
-    console.log('Tous les employés ont été créés avec succès!');
-    console.log('Mot de passe commun pour tous: ' + password);
-  } catch (error) {
-    console.error('Erreur lors de la création des employés:', error);
-  } finally {
-    // Fermer la connexion MongoDB
-    await mongoose.disconnect();
-    console.log('Déconnecté de MongoDB');
-  }
-};
-
-// Exécuter la fonction
-createEmployees(); 
+    
+    // Vérifier que les employés ont été créés
+    const allStaff = await db.collection('users').find({ 
+      cluster: new mongoose.Types.ObjectId(clusterId),
+      role: { $in: ['admin', 'manager', 'employee'] }
+    }).toArray();
+    
+    console.log(`Il y a maintenant ${allStaff.length} membres du staff pour ce cluster:`);
+    allStaff.forEach(staff => {
+      console.log(`- ${staff.firstName} ${staff.lastName} (${staff.email}) - Rôle: ${staff.role}`);
+    });
+    
+    process.exit(0);
+  })
+  .catch(err => {
+    console.error('Erreur de connexion à MongoDB:', err);
+    process.exit(1);
+  }); 

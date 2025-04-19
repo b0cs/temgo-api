@@ -37,7 +37,17 @@ const memberSchema = new Schema({
   },
   absences: [absenceSchema], // Liste des périodes d'absence
   loginAttempts: { type: Number, default: 0 }, // Compteur de tentatives de connexion infructueuses
-  lockUntil: { type: Date } // Date jusqu'à laquelle le compte est verrouillé en cas de trop nombreuses tentatives
+  lockUntil: { type: Date }, // Date jusqu'à laquelle le compte est verrouillé en cas de trop nombreuses tentatives
+  gender: {
+    type: String,
+    enum: ["male", "female", "other", ""],
+    default: "",
+  },
+  status: {
+    type: String,
+    enum: ["active", "banned"],
+    default: "active",
+  },
 }, {
   timestamps: true // Gère automatiquement les champs createdAt et updatedAt
 });
