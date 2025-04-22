@@ -128,3 +128,11 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Uploads and exports directories
+uploads/
+uploads/*
+exports/
+exports/*
+public/uploads/
+public/exports/
