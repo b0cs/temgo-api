@@ -1,0 +1,1 @@
+router.delete('/:memberId', auth, deleteMember); 

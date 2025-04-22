@@ -7,7 +7,8 @@ import {
     loginMember,
     updateMemberSchedule,
     addMemberAbsence,
-    getAllMembersByCluster
+    getAllMembersByCluster,
+    deleteMember
 } from '../controllers/member.controller.js';
 import { authMiddleware } from '../middleware/auth.middleware.js';
 import Member from '../models/member.model.js';
@@ -73,5 +74,8 @@ memberRouter.put('/:memberId/status', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur', error: error.message });
   }
 });
+
+// Route pour supprimer un membre
+memberRouter.delete('/:memberId', authMiddleware, deleteMember);
 
 export default memberRouter;

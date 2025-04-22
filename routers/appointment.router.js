@@ -39,4 +39,10 @@ appointmentRouter.delete("/cancel/:appointmentId", checkPermissions(['canManageA
 // Assigner un employé à un rendez-vous
 appointmentRouter.put("/assign/:appointmentId", checkPermissions(['canManageAppointments']), assignEmployeeToAppointment);
 
+// Mettre à jour les informations d'un rendez-vous
+appointmentRouter.put("/update/:appointmentId", checkPermissions(['canManageAppointments']), updateAppointment);
+
+// Mettre à jour le statut de présence d'un rendez-vous (honoré, non honoré, annulé)
+appointmentRouter.put("/attendance/:appointmentId", checkPermissions(['canManageAppointments']), updateAppointmentAttendance);
+
 export default appointmentRouter;

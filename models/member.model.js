@@ -45,9 +45,16 @@ const memberSchema = new Schema({
   },
   status: {
     type: String,
-    enum: ["active", "banned"],
+    enum: ["active", "banned", "deleted"],
     default: "active",
   },
+  deletedAt: { type: Date }, // Date de suppression
+  anonymizedData: { // Données anonymisées après suppression
+    firstName: { type: String },
+    lastName: { type: String },
+    email: { type: String },
+    phone: { type: String }
+  }
 }, {
   timestamps: true // Gère automatiquement les champs createdAt et updatedAt
 });

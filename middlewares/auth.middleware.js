@@ -7,67 +7,10 @@ dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET || 'votre-secret-jwt';
 
 /**
- * Version simplifiée du middleware d'authentification pour le débogage
- */
-export const verifyToken = async (req, res, next) => {
-  try {
-    // Pour le débogage: autoriser toutes les requêtes aux endpoints dashboard
-    if (req.url.includes('/dashboard/')) {
-      console.log('🔓 Authentification désactivée pour le dashboard (débogage)');
-      // Créer un utilisateur factice
-      req.user = {
-        id: '65c2acfeb12f28d2d88970e8',
-        email: 'debug@temgo.com',
-        role: 'admin',
-        permissions: { canManageEmployees: true, canManageAppointments: true },
-        cluster: '67ff7963a05ffbb0f61f8d5f'
-      };
-      return next();
-    }
-
-    // Authentification normale pour les autres endpoints
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Accès non autorisé. Token manquant' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    
-    if (!user) {
-      return res.status(401).json({ message: 'Utilisateur non trouvé ou token invalide' });
-    }
-
-    if (!user.isActive) {
-      return res.status(403).json({ message: 'Compte désactivé. Contactez l\'administrateur' });
-    }
-
-    req.user = {
-      id: user._id,
-      email: user.email,
-      role: user.role,
-      permissions: user.permissions,
-      cluster: user.cluster
-    };
-
-    next();
-  } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ message: 'Token invalide' });
-    }
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ message: 'Token expiré' });
-    }
-    res.status(500).json({ message: 'Erreur d\'authentification: ' + error.message });
-  }
-};
-
-/**
  * Middleware d'authentification
  * Vérifie la validité du token JWT et charge l'utilisateur
  */
-export const authMiddleware = async (req, res, next) => {
+export const verifyToken = async (req, res, next) => {
   try {
     // Récupérer le token du header Authorization
     const authHeader = req.headers.authorization;

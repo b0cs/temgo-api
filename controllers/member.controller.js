@@ -78,12 +78,22 @@ export const createMember = async (req, res) => {
 }
 
 export const getMembersByCluster = async (req, res) => {
-    const { clusterId } = req.params; 
-    console.log("clusterId", clusterId);
+    const { clusterId } = req.params;
+    const { status } = req.query;
+    
+    console.log("🔍 Recherche de membres pour le cluster:", clusterId, "avec le statut:", status);
+    
     try {
-        const members = await Member.find({ cluster: clusterId });
+        const query = { cluster: clusterId };
+        if (status) {
+            query.status = status;
+        }
+        
+        const members = await Member.find(query);
+        console.log(`✅ ${members.length} membres trouvés`);
         res.status(200).json(members);
     } catch (error) {
+        console.error("❌ Erreur lors de la recherche des membres:", error);
         res.status(404).json({ message: error.message });
     }
 };
@@ -217,65 +227,41 @@ export const addMemberAbsence = async (req, res) => {
 };
 
 export const getAllMembersByCluster = async (req, res) => {
-    const { clusterId } = req.params; 
-    console.log("Recherche de tous les membres pour le cluster:", clusterId);
+    const { clusterId } = req.params;
+    const { status } = req.query;
+    
+    console.log("🔍 Recherche de tous les membres pour le cluster:", clusterId, "avec le statut:", status);
     
     try {
-        // Vérifier que l'ID du cluster est valide
-        if (!mongoose.Types.ObjectId.isValid(clusterId)) {
-            return res.status(400).json({ message: "ID de cluster invalide" });
+        const query = { cluster: clusterId };
+        if (status) {
+            query.status = status;
         }
         
-        const clusterObjectId = new mongoose.Types.ObjectId(clusterId);
+        // Chercher dans la collection members
+        const members = await Member.find(query);
         
-        // Récupérer les membres depuis la collection 'members'
-        const members = await Member.find({ cluster: clusterObjectId });
-        console.log(`Nombre de membres trouvés dans la collection members: ${members.length}`);
-        
-        // Récupérer les membres depuis la collection 'users' qui ont le rôle 'client'
-        const userClients = await mongoose.connection.db.collection('users').find({ 
-            cluster: clusterObjectId,
-            role: 'client'
+        // Chercher dans la collection users
+        const users = await mongoose.connection.db.collection('users').find({
+            cluster: new mongoose.Types.ObjectId(clusterId),
+            role: 'client',
+            ...(status && { status })
         }).toArray();
-        console.log(`Nombre de membres trouvés dans la collection users: ${userClients.length}`);
         
-        // Récupérer les membres depuis la collection 'clients'
-        const clientCollection = await mongoose.connection.db.collection('clients').find({ 
-            cluster: clusterObjectId
+        // Chercher dans la collection clients
+        const clients = await mongoose.connection.db.collection('clients').find({
+            cluster: new mongoose.Types.ObjectId(clusterId),
+            ...(status && { status })
         }).toArray();
-        console.log(`Nombre de membres trouvés dans la collection clients: ${clientCollection.length}`);
         
-        // Combiner les résultats en évitant les doublons
-        let combinedMembers = [...members];
+        // Fusionner les résultats
+        const allMembers = [...members, ...users, ...clients];
+        console.log(`✅ ${allMembers.length} membres trouvés au total`);
         
-        // Ajouter les clients de la collection users s'ils n'existent pas déjà
-        for (const client of userClients) {
-            const exists = combinedMembers.some(member => 
-                (member.email && client.email && member.email === client.email) || 
-                (member._id && client._id && member._id.toString() === client._id.toString())
-            );
-            if (!exists) {
-                combinedMembers.push(client);
-            }
-        }
-        
-        // Ajouter les clients de la collection clients s'ils n'existent pas déjà
-        for (const client of clientCollection) {
-            const exists = combinedMembers.some(member => 
-                (member.email && client.email && member.email === client.email) || 
-                (member._id && client._id && member._id.toString() === client._id.toString())
-            );
-            if (!exists) {
-                combinedMembers.push(client);
-            }
-        }
-        
-        console.log(`Nombre total de membres après fusion: ${combinedMembers.length}`);
-        
-        res.status(200).json(combinedMembers);
+        res.status(200).json(allMembers);
     } catch (error) {
-        console.error("Erreur lors de la récupération des membres:", error);
-        res.status(500).json({ message: error.message });
+        console.error("❌ Erreur lors de la recherche des membres:", error);
+        res.status(404).json({ message: error.message });
     }
 };
 
@@ -374,5 +360,116 @@ export const createAppointment = async (req, res) => {
   } catch (error) {
     console.error('Erreur lors de la création du rendez-vous:', error);
     res.status(500).json({ message: 'Erreur serveur', error: error.message });
+  }
+};
+
+// Supprimer un client (soft delete)
+export const deleteMember = async (req, res) => {
+  try {
+    const { memberId } = req.params;
+    
+    console.log(`🔍 Tentative de suppression du membre ${memberId}`);
+    
+    // Vérifier si l'ID est valide
+    if (!mongoose.Types.ObjectId.isValid(memberId)) {
+      console.log(`❌ ID invalide: ${memberId}`);
+      return res.status(400).json({ message: 'ID de membre invalide' });
+    }
+    
+    // Chercher le membre dans toutes les collections
+    let member = await Member.findById(memberId);
+    
+    if (!member) {
+      // Essayer dans la collection users
+      member = await mongoose.connection.db.collection('users').findOne({ 
+        _id: new mongoose.Types.ObjectId(memberId),
+        role: 'client'
+      });
+    }
+    
+    if (!member) {
+      // Essayer dans la collection clients
+      member = await mongoose.connection.db.collection('clients').findOne({ 
+        _id: new mongoose.Types.ObjectId(memberId)
+      });
+    }
+    
+    if (!member) {
+      console.log(`❌ Membre non trouvé dans aucune collection: ${memberId}`);
+      return res.status(404).json({ message: 'Membre non trouvé' });
+    }
+
+    console.log(`✅ Membre trouvé: ${member.firstName} ${member.lastName}`);
+
+    // Vérifier les rendez-vous futurs
+    const futureAppointments = await Appointment.find({
+      member: memberId,
+      startTime: { $gte: new Date() }
+    }).populate('service', 'name');
+
+    console.log(`📅 Nombre de rendez-vous futurs trouvés: ${futureAppointments.length}`);
+
+    if (futureAppointments.length > 0) {
+      console.log(`⚠️ Rendez-vous à venir trouvés pour le membre ${memberId}`);
+      return res.status(400).json({
+        message: 'Impossible de supprimer ce client car il a des rendez-vous à venir',
+        appointments: futureAppointments.map(app => ({
+          id: app._id,
+          date: app.startTime,
+          service: app.service ? app.service.name : 'Service inconnu'
+        }))
+      });
+    }
+
+    // Anonymiser les données
+    const anonymizedData = {
+      firstName: `Client_${member._id.toString().substring(0, 6)}`,
+      lastName: 'Supprimé',
+      email: `deleted_${member._id}@temgo.com`,
+      phone: `deleted_${member._id}`
+    };
+
+    // Mettre à jour le membre dans la collection appropriée
+    if (member instanceof Member) {
+      member.status = 'deleted';
+      member.deletedAt = new Date();
+      member.anonymizedData = anonymizedData;
+      member.firstName = anonymizedData.firstName;
+      member.lastName = anonymizedData.lastName;
+      member.email = anonymizedData.email;
+      member.phone = anonymizedData.phone;
+      await member.save();
+    } else {
+      // Pour les autres collections, utiliser updateOne avec le nom de la collection
+      const collectionName = member.constructor.modelName === 'User' ? 'users' : 'clients';
+      await mongoose.connection.db.collection(collectionName).updateOne(
+        { _id: member._id },
+        {
+          $set: {
+            status: 'deleted',
+            deletedAt: new Date(),
+            anonymizedData,
+            firstName: anonymizedData.firstName,
+            lastName: anonymizedData.lastName,
+            email: anonymizedData.email,
+            phone: anonymizedData.phone
+          }
+        }
+      );
+    }
+
+    console.log(`✅ Membre ${memberId} supprimé avec succès`);
+
+    res.status(200).json({
+      message: 'Client supprimé avec succès',
+      member: {
+        id: member._id,
+        status: 'deleted',
+        deletedAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erreur lors de la suppression du client:', error);
+    res.status(500).json({ message: 'Erreur lors de la suppression du client' });
   }
 };

@@ -1,6 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.middleware.js';
-import { login, createEmployee } from '../controllers/auth.controller.js';
+import { login, createEmployee, getMe } from '../controllers/auth.controller.js';
 import { 
     getStaffsByCluster, 
     getStaffDetails, 
@@ -20,6 +20,9 @@ authRouter.post('/login', login);
 
 // Routes nécessitant une authentification
 authRouter.use(authMiddleware);
+
+// Route pour récupérer les informations de l'utilisateur connecté
+authRouter.get('/me', getMe);
 
 // Création d'un employé
 authRouter.post('/employee', createEmployee);

@@ -7,6 +7,9 @@ import tableLayoutRouter from './tableLayout.router.js';
 import tableRouter from './table.router.js';
 import authRouter from './auth.router.js';
 import reviewRouter from './review.router.js';
+import imageRouter from '../routes/image.routes.js';
+import dashboardRouter from './dashboard.router.js';
+import exportRouter from './export.router.js';
 
 const router = express.Router();
 
@@ -33,6 +36,15 @@ router.use('/table', tableRouter);
 
 // Routes pour les layouts de tables
 router.use('/tableLayout', tableLayoutRouter);
+
+// Routes pour les images
+router.use('/images', imageRouter);
+
+// Routes pour le dashboard
+router.use('/dashboard', dashboardRouter);
+
+// Routes pour l'exportation de données
+router.use('/exports', exportRouter);
 
 export default router;
 

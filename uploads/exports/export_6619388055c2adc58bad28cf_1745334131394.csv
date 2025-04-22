@@ -1,0 +1,31 @@
+Id;Client;ClientEmail;Service;Prix;Duree;Employe;Date;HeureDebut;HeureFin;Statut;Paiement;Notes
+67ff766356b144184b618f01;Lucas Martin;lucas.martin@example.com;shampoing;20;25;Employé Un;19/04/2025 11:30:00;11:30:00;11:55:00;pending;Non payé;Note pour ce rendez-vous
+67ff766356b144184b618f02;Lucas Martin;lucas.martin@example.com;coiffure homme;25;30;Admin Temgo;19/04/2025 11:00:00;11:00:00;11:30:00;completed;Non payé;Note pour ce rendez-vous
+67ff766356b144184b618efe;Chloé Petit;chloe.petit@example.com;ID: [object Object];Non disponible;Non disponible;Employé Un;18/04/2025 11:15:00;11:15:00;12:45:00;confirmed;Non payé;
+67ff766356b144184b618ef9;Emma Dubois;emma.dubois@example.com;ID: [object Object];Non disponible;Non disponible;Admin Temgo;17/04/2025 15:30:00;15:30:00;16:30:00;completed;Non payé;
+67ff766356b144184b618efb;Emma Dubois;emma.dubois@example.com;ID: [object Object];Non disponible;Non disponible;Admin Temgo;17/04/2025 09:00:00;09:00:00;09:30:00;completed;Non payé;
+67ff766356b144184b618ef6;Chloé Petit;chloe.petit@example.com;ID: [object Object];Non disponible;Non disponible;Admin Temgo;16/04/2025 09:00:00;09:00:00;10:30:00;confirmed;Non payé;Note pour ce rendez-vous
+67ff766356b144184b618ef7;Lucas Martin;lucas.martin@example.com;ID: [object Object];Non disponible;Non disponible;ID: Non assigné;16/04/2025 09:30:00;09:30:00;10:30:00;confirmed;Non payé;
+67ff766356b144184b618ef8;Lucas Martin;lucas.martin@example.com;ID: [object Object];Non disponible;Non disponible;Admin Temgo;16/04/2025 12:15:00;12:15:00;13:15:00;completed;Non payé;
+67ff766356b144184b618eff;Chloé Petit;chloe.petit@example.com;ID: [object Object];Non disponible;Non disponible;ID: Non assigné;18/04/2025 11:30:00;11:30:00;13:00:00;confirmed;Non payé;
+67ff766356b144184b618f00;Lucas Martin;lucas.martin@example.com;coiffure homme;25;30;Admin Temgo;19/04/2025 09:00:00;09:00:00;09:30:00;completed;Non payé;
+67ff766356b144184b618efc;Chloé Petit;chloe.petit@example.com;barbe;5;15;Employé Un;18/04/2025 13:00:00;13:00:00;13:15:00;confirmed;Non payé;Note pour ce rendez-vous
+67ff766356b144184b618efd;Lucas Martin;lucas.martin@example.com;shampoing;20;25;Admin Temgo;18/04/2025 13:00:00;13:00:00;13:25:00;confirmed;Non payé;
+6800fd33ca5718408b531cca;Lucas Martin;lucas.martin@example.com;coiffure homme;25;30;Admin Temgo;17/04/2025 19:00:00;19:00:00;19:30:00;scheduled;pending;
+6800fd59ca5718408b531cfb;Emma Dubois;emma.dubois@example.com;coloration femme;17;60;Admin Temgo;17/04/2025 22:00:00;22:00:00;23:00:00;no_show;pending;
+6800fdd8ca5718408b531d2e;Lucas Martin;lucas.martin@example.com;coiffure homme;25;30;Admin Temgo;17/04/2025 23:00:00;23:00:00;23:30:00;scheduled;pending;
+6800ff1fca5718408b531e0a;Lucas Martin;lucas.martin@example.com;meches;99;45;Admin Temgo;17/04/2025 19:56:00;19:56:00;20:41:00;scheduled;pending;
+6800ffddca5718408b531e99;Chloé Petit;chloe.petit@example.com;coloration femme;17;60;Admin Temgo;18/04/2025 02:00:00;02:00:00;03:00:00;no_show;pending;
+6801003dca5718408b531f19;Lucas Martin;lucas.martin@example.com;shampoing;20;25;Admin Temgo;18/04/2025 09:00:00;09:00:00;09:25:00;scheduled;pending;
+68010665ca5718408b53216e;Chloé Petit;chloe.petit@example.com;soin complet;25;120;Admin Temgo;25/04/2025 09:00:00;09:00:00;11:00:00;scheduled;pending;
+680107c4ca5718408b532259;Lucas Martin;lucas.martin@example.com;ID: 680107b1ca5718408b532212;Non disponible;Non disponible;Admin Temgo;26/04/2025 09:00:00;09:00:00;10:00:00;scheduled;pending;
+68011d3dca5718408b532612;Chloé Petit;chloe.petit@example.com;soin complet;25;120;Admin Temgo;30/04/2025 18:00:00;18:00:00;20:00:00;scheduled;pending;
+6802b7b0ef55fcabc7721cce;Emma Dubois;emma.dubois@example.com;soin complet;25;120;Employé Un;19/04/2025 12:00:00;12:00:00;14:00:00;scheduled;pending;
+6804d381f922a4120be4f744;Chloé Petit;chloe.petit@example.com;coloration femme;17;60;Adrien T;25/04/2025 15:00:00;15:00:00;16:00:00;scheduled;pending;
+6804d89ef922a4120be4f806;Lucas Martin;lucas.martin@example.com;coiffure homme;25;30;Adrien T;28/04/2025 13:20:00;13:20:00;13:50:00;scheduled;pending;
+6804daecf922a4120be4f880;Emma Dubois;emma.dubois@example.com;coiffure homme;25;30;Adrien T;30/04/2025 14:30:00;14:30:00;15:00:00;scheduled;pending;
+6804db6af922a4120be4fa75;Emma Dubois;emma.dubois@example.com;coiffure homme;25;30;Adrien T;24/04/2025 15:25:00;15:25:00;15:55:00;scheduled;pending;
+6804dbabf922a4120be4fb3c;Emma Dubois;emma.dubois@example.com;coiffure homme;25;30;Adrien T;28/04/2025 09:30:00;09:30:00;10:00:00;scheduled;pending;
+6804dbd6f922a4120be4fc08;Emma Dubois;emma.dubois@example.com;coiffure homme;25;30;Adrien T;28/04/2025 16:34:00;16:34:00;17:04:00;scheduled;pending;
+68051425a3691dc4e6b961db;Chloé Petit;chloe.petit@example.com;coiffure homme;25;30;Lysandre Pottier;22/04/2025 14:15:00;14:15:00;14:45:00;scheduled;pending;
+6806649aafb989f15b9e3bb4;Emma Dubois;emma.dubois@example.com;coiffure homme;25;30;Lysandre Pottier;22/04/2025 15:30:00;15:30:00;16:00:00;scheduled;pending;

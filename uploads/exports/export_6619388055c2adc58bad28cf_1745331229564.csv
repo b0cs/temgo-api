@@ -1,0 +1,11 @@
+Id;Client;ClientEmail;Service;Prix;Duree;Employe;Date;HeureDebut;HeureFin;Statut;Paiement;Notes
+example-apt-1;Client Exemple 1;client1@exemple.com;Coiffure;38;45;Thomas M.;13/04/2025 16:13:49;14:30;12:15;Annulé;En attente;Notes d'exemple pour le rendez-vous 1
+example-apt-2;Client Exemple 2;client2@exemple.com;Soin;64;60;Marc B.;10/04/2025 16:13:49;13:45;13:45;Terminé;Remboursé;Notes d'exemple pour le rendez-vous 2
+example-apt-3;Client Exemple 3;client3@exemple.com;Brushing;59;30;Julie L.;18/04/2025 16:13:49;12:30;12:45;Terminé;Remboursé;Notes d'exemple pour le rendez-vous 3
+example-apt-4;Client Exemple 4;client4@exemple.com;Brushing;55;45;Lucie F.;14/04/2025 16:13:49;12:00;14:30;Confirmé;Payé;Notes d'exemple pour le rendez-vous 4
+example-apt-5;Client Exemple 5;client5@exemple.com;Brushing;44;120;Thomas M.;17/04/2025 16:13:49;11:30;15:45;En attente;En attente;Notes d'exemple pour le rendez-vous 5
+example-apt-6;Client Exemple 6;client6@exemple.com;Coiffure;24;30;Marc B.;13/04/2025 16:13:49;16:15;12:00;Confirmé;Remboursé;Notes d'exemple pour le rendez-vous 6
+example-apt-7;Client Exemple 7;client7@exemple.com;Brushing;33;60;Sarah D.;13/04/2025 16:13:49;15:00;13:30;Confirmé;Payé;Notes d'exemple pour le rendez-vous 7
+example-apt-8;Client Exemple 8;client8@exemple.com;Coloration;48;90;Lucie F.;22/04/2025 16:13:49;14:15;17:15;Confirmé;En attente;Notes d'exemple pour le rendez-vous 8
+example-apt-9;Client Exemple 9;client9@exemple.com;Coiffure;26;120;Thomas M.;24/03/2025 16:13:49;10:15;11:45;Annulé;Payé;Notes d'exemple pour le rendez-vous 9
+example-apt-10;Client Exemple 10;client10@exemple.com;Coloration;52;45;Sarah D.;16/04/2025 16:13:49;11:30;11:30;Annulé;Remboursé;Notes d'exemple pour le rendez-vous 10
