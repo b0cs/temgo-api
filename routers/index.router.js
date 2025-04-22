@@ -8,6 +8,7 @@ import tableRouter from './table.router.js';
 import authRouter from './auth.router.js';
 import reviewRouter from './review.router.js';
 import imageRouter from '../routes/image.routes.js';
+import uploadRouter from '../routes/upload.routes.js';
 import dashboardRouter from './dashboard.router.js';
 import exportRouter from './export.router.js';
 
@@ -39,6 +40,9 @@ router.use('/tableLayout', tableLayoutRouter);
 
 // Routes pour les images
 router.use('/images', imageRouter);
+
+// Routes pour l'upload via Cloudinary
+router.use('/upload', uploadRouter);
 
 // Routes pour le dashboard
 router.use('/dashboard', dashboardRouter);
