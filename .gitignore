@@ -130,9 +130,14 @@ dist
 .pnp.*
 
 # Uploads and exports directories
-uploads/
 uploads/*
-exports/
+!uploads/.gitkeep
+!uploads/exports
+uploads/exports/*
+!uploads/exports/.gitkeep
 exports/*
-public/uploads/
-public/exports/
+!exports/.gitkeep
+public/uploads/*
+!public/uploads/.gitkeep
+public/exports/*
+!public/exports/.gitkeep
