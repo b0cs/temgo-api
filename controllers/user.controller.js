@@ -374,6 +374,61 @@ export const checkStaffAppointments = async (req, res) => {
 };
 
 /**
+ * Vérifie si un utilisateur est le propriétaire d'un cluster
+ * @param {Object} user L'utilisateur à vérifier
+ * @param {String} clusterId L'ID du cluster
+ * @returns {Promise<Boolean>} true si l'utilisateur est le propriétaire
+ */
+const isAccountOwner = async (user, clusterId) => {
+    try {
+        // Si l'utilisateur est admin ou a le rôle 'owner', c'est probablement un propriétaire
+        if (user.role === 'admin' || user.role === 'owner') {
+            return true;
+        }
+        
+        // Si l'email de l'utilisateur contient le nom du cluster, il est probablement propriétaire
+        // Par exemple: resto@temgo.com pour un restaurant
+        if (user.email.includes('resto@') || user.email.endsWith('@temgo.com')) {
+            return true;
+        }
+        
+        // Vérifier si c'est le premier utilisateur créé pour ce cluster
+        const cluster = await mongoose.model('Cluster').findById(clusterId);
+        if (cluster && cluster.createdBy && cluster.createdBy.toString() === user._id.toString()) {
+            return true;
+        }
+        
+        // Vérifier dans la collection des utilisateurs s'il est marqué comme propriétaire
+        const userCount = await User.countDocuments({ 
+            cluster: mongoose.Types.ObjectId(clusterId)
+        });
+        
+        // S'il n'y a qu'un seul utilisateur dans le cluster, c'est probablement le propriétaire
+        if (userCount <= 1) {
+            return true;
+        }
+        
+        // Si l'utilisateur est le seul manager dans le cluster, c'est probablement le propriétaire
+        if (user.role === 'manager') {
+            const managerCount = await User.countDocuments({
+                cluster: mongoose.Types.ObjectId(clusterId),
+                role: 'manager'
+            });
+            
+            if (managerCount <= 1) {
+                return true;
+            }
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('Erreur dans isAccountOwner:', error);
+        // En cas de doute, considérer comme non-propriétaire
+        return false;
+    }
+};
+
+/**
  * Supprime un staff après vérification des rendez-vous
  */
 export const deleteStaff = async (req, res) => {
@@ -394,6 +449,15 @@ export const deleteStaff = async (req, res) => {
         // Vérifier les permissions (seuls les admins et managers peuvent supprimer des staffs)
         if (req.user.role !== 'admin' && req.user.role !== 'manager') {
             return res.status(403).json({ message: 'Vous n\'avez pas les permissions pour supprimer un staff' });
+        }
+        
+        // PROTECTION AMÉLIORÉE: Vérifier si c'est un compte propriétaire de cluster
+        const isOwner = await isAccountOwner(staff, staff.cluster);
+        if (isOwner) {
+            return res.status(403).json({ 
+                message: 'Impossible de supprimer un compte propriétaire',
+                details: 'Ce compte est identifié comme propriétaire de l\'établissement et ne peut pas être supprimé pour assurer le bon fonctionnement de l\'application'
+            });
         }
         
         // Vérifier si l'utilisateur a des rendez-vous en cours ou futurs

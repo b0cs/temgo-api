@@ -9,7 +9,7 @@ clusterRouter.get("/", getAllClusters);
 // Route pour récupérer un cluster par son ID
 clusterRouter.get("/:clusterId", getClusterById);
 
-clusterRouter.post("/service/:clusterId", addCluster);
+clusterRouter.post("/service", addCluster);
 
 clusterRouter.get("/service/:clusterId", getAllServices);
 

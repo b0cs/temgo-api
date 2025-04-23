@@ -5,16 +5,39 @@ import Cluster from '../models/cluster.model.js';
 // Contrôleur pour ajouter un cluster
 export const addCluster = async (req, res) => {
     try {
-        // Récupérer les données du cluster à partir de la requête
-        const { name, description, type, ownerName } = req.body;
+        // Récupérer toutes les données du cluster à partir de la requête
+        const { 
+            name, 
+            description, 
+            type, 
+            ownerName,
+            address,
+            contact,
+            email,
+            geolocation,
+            services = []
+        } = req.body;
 
-        // Créer une nouvelle instance du modèle Cluster
+        // Assurer que la géolocalisation est correctement formatée si fournie
+        const geoLocation = geolocation ? {
+            type: 'Point',
+            coordinates: geolocation.coordinates || [0, 0]
+        } : {
+            type: 'Point',
+            coordinates: [0, 0] // Coordonnées par défaut
+        };
+
+        // Créer une nouvelle instance du modèle Cluster avec tous les champs
         const newCluster = new Cluster({
             name,
             description,
             type,
-            ownerName, 
-            clusterUrl: "sabotage-1"
+            ownerName,
+            address,
+            contact,
+            email,
+            geolocation: geoLocation,
+            services
         });
 
         // Enregistrer le nouveau cluster dans la base de données
@@ -24,6 +47,7 @@ export const addCluster = async (req, res) => {
         res.status(201).json(savedCluster);
     } catch (error) {
         // Gérer les erreurs
+        console.error("Erreur lors de la création du cluster:", error);
         res.status(500).json({ error: error.message });
     }
 };

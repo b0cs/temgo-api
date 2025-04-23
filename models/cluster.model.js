@@ -168,9 +168,83 @@ const socialMediaSchema = new Schema({
   website: { type: String }
 });
 
+// Schéma pour les caractéristiques du restaurant
+const restaurantFeaturesSchema = new Schema({
+  // Ambiance et style
+  cuisine: [{ type: String }], // Types de cuisine (français, italien, etc.)
+  priceRange: { type: Number, min: 1, max: 5, default: 2 }, // Niveau de prix (1 = $, 5 = $$$$$)
+  atmosphere: [{ type: String }], // Ambiance (décontractée, romantique, etc.)
+  dresscode: { type: String, enum: ['casual', 'smart_casual', 'business_casual', 'formal', 'none'], default: 'none' },
+  
+  // Caractéristiques physiques
+  seatingCapacity: { type: Number }, // Capacité d'accueil totale
+  privateRooms: { type: Boolean, default: false }, // Salles privées disponibles
+  privateRoomCapacity: { type: Number }, // Capacité des salles privées
+  outdoorSeating: { type: Boolean, default: false }, // Terrasse extérieure
+  barSeating: { type: Boolean, default: false }, // Places au bar
+  
+  // Options de restauration
+  takeout: { type: Boolean, default: false }, // Vente à emporter
+  delivery: { type: Boolean, default: false }, // Livraison
+  catering: { type: Boolean, default: false }, // Service traiteur
+  reservationsRequired: { type: Boolean, default: false }, // Réservation obligatoire
+  
+  // Accessibilité et confort
+  wheelchairAccessible: { type: Boolean, default: false }, // Accessible aux fauteuils roulants
+  childFriendly: { type: Boolean, default: true }, // Adapté aux enfants
+  petFriendly: { type: Boolean, default: false }, // Animaux acceptés
+  parkingAvailable: { type: Boolean, default: false }, // Parking disponible
+  
+  // Services et options
+  wineList: { type: Boolean, default: false }, // Carte des vins
+  fullBar: { type: Boolean, default: false }, // Bar complet
+  corkageFee: { type: Boolean, default: false }, // Droit de bouchon
+  chefTable: { type: Boolean, default: false }, // Table du chef
+  privateEvents: { type: Boolean, default: false }, // Événements privés
+  liveMusic: { type: Boolean, default: false }, // Musique live
+  tvs: { type: Boolean, default: false }, // Télévisions
+  
+  // Paiement et divers
+  creditCardsAccepted: [{ type: String }], // Types de cartes acceptées
+  reservationPlatforms: [{ type: String }], // Plateformes de réservation utilisées
+  deliveryPlatforms: [{ type: String }], // Plateformes de livraison
+  
+  // Certifications et distinctions
+  awards: [{ 
+    name: { type: String }, // Nom de la distinction
+    year: { type: Number }, // Année d'obtention
+    description: { type: String } // Description
+  }],
+  
+  // Options pour les allergies et régimes alimentaires
+  allergiesInfo: { type: Boolean, default: false }, // Informations sur les allergènes disponibles
+  dietaryOptions: {
+    vegetarian: { type: Boolean, default: false }, // Options végétariennes
+    vegan: { type: Boolean, default: false }, // Options véganes
+    glutenFree: { type: Boolean, default: false }, // Sans gluten
+    dairyFree: { type: Boolean, default: false }, // Sans lactose
+    nutFree: { type: Boolean, default: false }, // Sans fruits à coque
+    halal: { type: Boolean, default: false }, // Halal
+    kosher: { type: Boolean, default: false } // Casher
+  },
+  
+  // Politique de réservation
+  reservationPolicy: {
+    maxPeoplePerReservation: { type: Number, default: 20 }, // Nombre max de personnes par réservation
+    depositRequired: { type: Boolean, default: false }, // Acompte requis
+    depositAmount: { type: Number }, // Montant de l'acompte
+    cancellationPolicy: { type: String }, // Politique d'annulation
+    noShowFee: { type: Boolean, default: false } // Frais en cas de non-présentation
+  }
+}, { _id: false });
+
 const clusterSchema = new Schema({
   name: { type: String, required: true },
-  type: { type: String, required: true, enum: ['HairSalon', 'BeautySalon', 'Restaurant', 'Bar', 'Cultural'] },
+  type: { 
+    type: String, 
+    required: true, 
+    enum: ['HairSalon', 'BeautySalon', 'Restaurant', 'Bar', 'Cultural'] 
+  },
   address: { type: String },
   geolocation: {
     type: { type: String, enum: ['Point'], default: 'Point'},
@@ -198,7 +272,16 @@ const clusterSchema = new Schema({
     coverUrl: { type: String }, // Image de couverture pour l'en-tête
   },
   
+  // Champs spécifiques aux restaurants
+  restaurantFeatures: { 
+    type: restaurantFeaturesSchema,
+    default: () => ({})
+  },
+  
+  // Données pour les salons de beauté et coiffure
   services: [serviceSchema], // Référence aux services offerts
+  
+  // Général
   reviews: [{ type: Schema.Types.ObjectId, ref: 'Review' }], // Référence aux avis laissés par les clients
   isActive: { type: Boolean, default: true, required: true }, // Indique si le cluster est actif
   customUrl: { type: String, unique: true, sparse: true }, // URL personnalisée pour le cluster, optionnellement unique
@@ -208,6 +291,16 @@ const clusterSchema = new Schema({
 
 // Index géospatial pour supporter les requêtes basées sur la localisation
 clusterSchema.index({ geolocation: '2dsphere' });
+
+// Méthode pour vérifier si c'est un restaurant
+clusterSchema.methods.isRestaurant = function() {
+  return this.type === 'Restaurant' || this.type === 'Bar';
+};
+
+// Méthode pour vérifier si c'est un salon de beauté
+clusterSchema.methods.isBeautySalon = function() {
+  return this.type === 'HairSalon' || this.type === 'BeautySalon';
+};
 
 const Cluster = mongoose.model('Cluster', clusterSchema);
 export default Cluster;

@@ -11,6 +11,7 @@ import imageRouter from '../routes/image.routes.js';
 import uploadRouter from '../routes/upload.routes.js';
 import dashboardRouter from './dashboard.router.js';
 import exportRouter from './export.router.js';
+import restaurantRouter from '../routes/restaurant.routes.js';
 
 const router = express.Router();
 
@@ -49,6 +50,9 @@ router.use('/dashboard', dashboardRouter);
 
 // Routes pour l'exportation de données
 router.use('/exports', exportRouter);
+
+// Routes pour les restaurants
+router.use('/restaurant', restaurantRouter);
 
 export default router;
 

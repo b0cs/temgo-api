@@ -122,7 +122,7 @@ export const login = async (req, res) => {
     }
 
     // Trouver l'utilisateur par email
-    const user = await User.findOne({ email }).populate('cluster', 'name location');
+    const user = await User.findOne({ email }).populate('cluster', 'name location type');
     if (!user) {
       return res.status(401).json({ message: 'Identifiants incorrects' });
     }
@@ -442,7 +442,7 @@ export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
       .select('-password -resetPasswordToken -resetPasswordExpires')
-      .populate('cluster', 'name location');
+      .populate('cluster', 'name location type');
     
     if (!user) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
