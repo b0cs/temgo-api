@@ -1,80 +1,12 @@
-import fs from 'fs';
-import path from 'path';
-import multer from 'multer';
-import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import Cluster from '../models/cluster.model.js';
-
-// Configuration pour le stockage local des images
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Créer le dossier s'il n'existe pas
-    const uploadDir = path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    
-    // Créer un sous-dossier pour le cluster si l'ID est fourni
-    if (req.params.clusterId) {
-      const clusterDir = path.join(uploadDir, req.params.clusterId);
-      if (!fs.existsSync(clusterDir)) {
-        fs.mkdirSync(clusterDir, { recursive: true });
-      }
-      cb(null, clusterDir);
-    } else {
-      cb(null, uploadDir);
-    }
-  },
-  filename: (req, file, cb) => {
-    // Générer un nom de fichier unique avec extension
-    const uniqueFilename = `${uuidv4()}${path.extname(file.originalname)}`;
-    cb(null, uniqueFilename);
-  }
-});
-
-// Filtrage des types de fichiers
-const fileFilter = (req, file, cb) => {
-  // Accepter uniquement les images
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Seuls les fichiers image sont autorisés'), false);
-  }
-};
-
-// Initialisation de multer
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // Limite à 5MB
-  }
-});
+import { upload, cloudinary } from '../config/cloudinary.js';
 
 // Middleware pour le téléchargement d'une image
 export const uploadImage = upload.single('image');
 
 // Middleware pour le téléchargement de plusieurs images (max 5)
 export const uploadMultipleImages = upload.array('images', 5);
-
-// Fonction pour optimiser une image
-const optimizeImage = async (filePath, width = 800) => {
-  try {
-    await sharp(filePath)
-      .resize(width) // Redimensionner à la largeur spécifiée, hauteur auto
-      .jpeg({ quality: 80 }) // Compression JPEG
-      .toFile(`${filePath}.optimized.jpg`);
-    
-    // Remplacer l'original par la version optimisée
-    fs.unlinkSync(filePath); // Supprimer l'original
-    fs.renameSync(`${filePath}.optimized.jpg`, filePath); // Renommer l'optimisé
-    
-    return true;
-  } catch (error) {
-    console.error('Erreur lors de l\'optimisation de l\'image:', error);
-    return false;
-  }
-};
 
 // Ajouter une image (featured, gallery, logo, cover)
 export const addImage = async (req, res) => {
@@ -89,22 +21,20 @@ export const addImage = async (req, res) => {
     // Vérifier que le type est valide
     const validTypes = ['featured', 'gallery', 'logo', 'cover'];
     if (!validTypes.includes(type)) {
-      // Supprimer le fichier si le type est invalide
-      fs.unlinkSync(req.file.path);
       return res.status(400).json({ message: 'Type d\'image invalide. Utilisez: featured, gallery, logo, ou cover' });
     }
     
-    // Optimiser l'image
-    await optimizeImage(req.file.path);
+    // Obtenir l'URL de l'image depuis Cloudinary
+    const imageUrl = req.file.path;
+    const publicId = req.file.filename;
     
-    // Obtenir l'URL de l'image (chemin relatif)
-    const imageUrl = `/uploads/${clusterId}/${req.file.filename}`;
+    console.log('Image téléchargée sur Cloudinary:', { url: imageUrl, publicId });
     
     // Rechercher le cluster
     const cluster = await Cluster.findById(clusterId);
     if (!cluster) {
-      // Supprimer le fichier si le cluster n'existe pas
-      fs.unlinkSync(req.file.path);
+      // Supprimer l'image de Cloudinary si le cluster n'existe pas
+      await cloudinary.uploader.destroy(publicId);
       return res.status(404).json({ message: 'Cluster non trouvé' });
     }
     
@@ -118,33 +48,33 @@ export const addImage = async (req, res) => {
     // Mettre à jour selon le type d'image
     switch (type) {
       case 'featured':
-        // Supprimer l'ancienne image si elle existe
+        // Supprimer l'ancienne image de Cloudinary si elle existe
         if (cluster.images.featured) {
-          const oldPath = path.join(process.cwd(), cluster.images.featured.replace(/^\//, ''));
-          if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
+          const oldPublicId = extractPublicIdFromUrl(cluster.images.featured);
+          if (oldPublicId) {
+            await cloudinary.uploader.destroy(oldPublicId);
           }
         }
         cluster.images.featured = imageUrl;
         break;
       
       case 'logo':
-        // Supprimer l'ancien logo s'il existe
+        // Supprimer l'ancien logo de Cloudinary s'il existe
         if (cluster.images.logoUrl) {
-          const oldPath = path.join(process.cwd(), cluster.images.logoUrl.replace(/^\//, ''));
-          if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
+          const oldPublicId = extractPublicIdFromUrl(cluster.images.logoUrl);
+          if (oldPublicId) {
+            await cloudinary.uploader.destroy(oldPublicId);
           }
         }
         cluster.images.logoUrl = imageUrl;
         break;
       
       case 'cover':
-        // Supprimer l'ancienne couverture si elle existe
+        // Supprimer l'ancienne couverture de Cloudinary si elle existe
         if (cluster.images.coverUrl) {
-          const oldPath = path.join(process.cwd(), cluster.images.coverUrl.replace(/^\//, ''));
-          if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
+          const oldPublicId = extractPublicIdFromUrl(cluster.images.coverUrl);
+          if (oldPublicId) {
+            await cloudinary.uploader.destroy(oldPublicId);
           }
         }
         cluster.images.coverUrl = imageUrl;
@@ -155,6 +85,7 @@ export const addImage = async (req, res) => {
         const orderValue = order ? parseInt(order, 10) : cluster.images.gallery.length;
         cluster.images.gallery.push({
           url: imageUrl,
+          publicId: publicId,
           order: orderValue,
           title: title || '',
           description: description || '',
@@ -169,14 +100,19 @@ export const addImage = async (req, res) => {
     res.status(200).json({
       message: 'Image téléchargée avec succès',
       imageUrl,
+      publicId,
       type
     });
   } catch (error) {
     console.error('Erreur lors de l\'ajout de l\'image:', error);
     
-    // Essayer de supprimer le fichier en cas d'erreur
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    // Essayer de supprimer l'image de Cloudinary en cas d'erreur
+    if (req.file && req.file.filename) {
+      try {
+        await cloudinary.uploader.destroy(req.file.filename);
+      } catch (deleteError) {
+        console.error('Erreur lors de la suppression de l\'image après échec:', deleteError);
+      }
     }
     
     res.status(500).json({
@@ -198,12 +134,10 @@ export const addMultipleImages = async (req, res) => {
     // Rechercher le cluster
     const cluster = await Cluster.findById(clusterId);
     if (!cluster) {
-      // Supprimer les fichiers si le cluster n'existe pas
-      req.files.forEach(file => {
-        if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
-        }
-      });
+      // Supprimer les images de Cloudinary si le cluster n'existe pas
+      for (const file of req.files) {
+        await cloudinary.uploader.destroy(file.filename);
+      }
       return res.status(404).json({ message: 'Cluster non trouvé' });
     }
     
@@ -214,19 +148,19 @@ export const addMultipleImages = async (req, res) => {
       };
     }
     
-    // Optimiser et ajouter chaque image
+    // Ajouter chaque image
     const uploadedImages = [];
     let startOrder = cluster.images.gallery.length;
     
     for (const file of req.files) {
-      await optimizeImage(file.path);
-      
-      // Créer l'URL de l'image
-      const imageUrl = `/uploads/${clusterId}/${file.filename}`;
+      // Obtenir l'URL de Cloudinary
+      const imageUrl = file.path;
+      const publicId = file.filename;
       
       // Ajouter à la galerie
       cluster.images.gallery.push({
         url: imageUrl,
+        publicId: publicId,
         order: startOrder++,
         title: '', // Peut être mis à jour plus tard
         description: '', // Peut être mis à jour plus tard
@@ -246,13 +180,15 @@ export const addMultipleImages = async (req, res) => {
   } catch (error) {
     console.error('Erreur lors de l\'ajout des images:', error);
     
-    // Essayer de supprimer les fichiers en cas d'erreur
+    // Essayer de supprimer les images de Cloudinary en cas d'erreur
     if (req.files && req.files.length > 0) {
-      req.files.forEach(file => {
-        if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path);
+      for (const file of req.files) {
+        try {
+          await cloudinary.uploader.destroy(file.filename);
+        } catch (deleteError) {
+          console.error('Erreur lors de la suppression de l\'image après échec:', deleteError);
         }
-      });
+      }
     }
     
     res.status(500).json({
@@ -306,6 +242,7 @@ export const deleteImage = async (req, res) => {
     }
     
     let imageUrl;
+    let publicId;
     
     switch (type) {
       case 'featured':
@@ -314,10 +251,10 @@ export const deleteImage = async (req, res) => {
           return res.status(404).json({ message: 'Image principale non trouvée' });
         }
         
-        // Supprimer le fichier
-        const featuredPath = path.join(process.cwd(), imageUrl.replace(/^\//, ''));
-        if (fs.existsSync(featuredPath)) {
-          fs.unlinkSync(featuredPath);
+        // Extraire l'ID public pour la suppression
+        publicId = extractPublicIdFromUrl(imageUrl);
+        if (publicId) {
+          await cloudinary.uploader.destroy(publicId);
         }
         
         // Mettre à jour le cluster
@@ -330,10 +267,10 @@ export const deleteImage = async (req, res) => {
           return res.status(404).json({ message: 'Logo non trouvé' });
         }
         
-        // Supprimer le fichier
-        const logoPath = path.join(process.cwd(), imageUrl.replace(/^\//, ''));
-        if (fs.existsSync(logoPath)) {
-          fs.unlinkSync(logoPath);
+        // Extraire l'ID public pour la suppression
+        publicId = extractPublicIdFromUrl(imageUrl);
+        if (publicId) {
+          await cloudinary.uploader.destroy(publicId);
         }
         
         // Mettre à jour le cluster
@@ -346,10 +283,10 @@ export const deleteImage = async (req, res) => {
           return res.status(404).json({ message: 'Image de couverture non trouvée' });
         }
         
-        // Supprimer le fichier
-        const coverPath = path.join(process.cwd(), imageUrl.replace(/^\//, ''));
-        if (fs.existsSync(coverPath)) {
-          fs.unlinkSync(coverPath);
+        // Extraire l'ID public pour la suppression
+        publicId = extractPublicIdFromUrl(imageUrl);
+        if (publicId) {
+          await cloudinary.uploader.destroy(publicId);
         }
         
         // Mettre à jour le cluster
@@ -369,11 +306,11 @@ export const deleteImage = async (req, res) => {
         }
         
         imageUrl = cluster.images.gallery[imageIndex].url;
+        publicId = cluster.images.gallery[imageIndex].publicId || extractPublicIdFromUrl(imageUrl);
         
-        // Supprimer le fichier
-        const galleryPath = path.join(process.cwd(), imageUrl.replace(/^\//, ''));
-        if (fs.existsSync(galleryPath)) {
-          fs.unlinkSync(galleryPath);
+        // Supprimer de Cloudinary
+        if (publicId) {
+          await cloudinary.uploader.destroy(publicId);
         }
         
         // Retirer l'image de la galerie
@@ -541,4 +478,42 @@ export const reorderGallery = async (req, res) => {
       error: error.message
     });
   }
-}; 
+};
+
+// Fonction utilitaire pour extraire l'ID public de Cloudinary à partir d'une URL
+function extractPublicIdFromUrl(url) {
+  if (!url) return null;
+  
+  try {
+    // Format typique d'une URL Cloudinary:
+    // https://res.cloudinary.com/[cloud_name]/image/upload/v[version]/[public_id].[extension]
+    const urlParts = url.split('/');
+    const filenameParts = urlParts[urlParts.length - 1].split('.');
+    
+    // Si c'est une URL Cloudinary valide
+    if (url.includes('cloudinary.com') && urlParts.includes('upload')) {
+      // Extraire le public_id avec le chemin complet après "upload/"
+      const uploadIndex = urlParts.indexOf('upload');
+      if (uploadIndex !== -1) {
+        // Joindre tous les segments après "upload" jusqu'à l'extension
+        const publicIdParts = urlParts.slice(uploadIndex + 1);
+        const lastPart = publicIdParts[publicIdParts.length - 1];
+        const extension = lastPart.split('.').pop();
+        
+        // Reconstruire le public_id en joignant les parties et en supprimant l'extension
+        let publicId = publicIdParts.join('/');
+        if (extension) {
+          publicId = publicId.substring(0, publicId.lastIndexOf('.' + extension));
+        }
+        
+        return publicId;
+      }
+    }
+    
+    // Fallback si ce n'est pas une URL Cloudinary standard
+    return filenameParts[0];
+  } catch (error) {
+    console.error('Erreur lors de l\'extraction du public_id:', error);
+    return null;
+  }
+} 
