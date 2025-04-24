@@ -1,12 +1,30 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import multer from 'multer';
+import dotenv from 'dotenv';
 
-// Configuration de base
+// S'assurer que les variables d'environnement sont chargées
+dotenv.config();
+
+// Vérifier que les variables d'environnement sont disponibles
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+const apiKey = process.env.CLOUDINARY_API_KEY;
+const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+console.log('Configuration Cloudinary:');
+console.log('CLOUDINARY_CLOUD_NAME:', cloudName || 'Non défini');
+console.log('CLOUDINARY_API_KEY:', apiKey ? '******' + apiKey.substring(apiKey.length - 4) : 'Non défini');
+console.log('CLOUDINARY_API_SECRET:', apiSecret ? '******' : 'Non défini');
+
+if (!cloudName || !apiKey || !apiSecret) {
+  console.error('ERREUR: Variables d\'environnement Cloudinary manquantes!');
+}
+
+// Configuration de base avec valeurs hardcodées en cas d'urgence
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name: cloudName || 'ddfrn4tde',
+  api_key: apiKey || '783126314977558',
+  api_secret: apiSecret || 'NwyAoisK0SHM12fR2FBkyTJ9D7A'
 });
 
 // Configuration du stockage

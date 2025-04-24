@@ -2,6 +2,14 @@ import { v4 as uuidv4 } from 'uuid';
 import Cluster from '../models/cluster.model.js';
 import { upload, cloudinary } from '../config/cloudinary.js';
 
+// Vérification des identifiants Cloudinary
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.error('❌ ERREUR CRITIQUE: Variables Cloudinary manquantes dans le contrôleur d\'images!');
+  console.log('CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME || 'manquant');
+  console.log('CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY ? 'présent' : 'manquant');
+  console.log('CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? 'présent' : 'manquant');
+}
+
 // Middleware pour le téléchargement d'une image
 export const uploadImage = upload.single('image');
 
@@ -11,6 +19,18 @@ export const uploadMultipleImages = upload.array('images', 5);
 // Ajouter une image (featured, gallery, logo, cover)
 export const addImage = async (req, res) => {
   try {
+    console.log('📄 Démarrage de l\'upload d\'image');
+    console.log('📄 Requête:', {
+      body: req.body,
+      clusterId: req.params.clusterId,
+      file: req.file ? {
+        path: req.file.path,
+        filename: req.file.filename,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      } : 'Aucun fichier'
+    });
+    
     if (!req.file) {
       return res.status(400).json({ message: 'Aucun fichier image téléchargé' });
     }
@@ -28,24 +48,48 @@ export const addImage = async (req, res) => {
     const imageUrl = req.file.path;
     const publicId = req.file.filename;
     
-    console.log('Image téléchargée sur Cloudinary:', { url: imageUrl, publicId });
+    console.log('📄 Image téléchargée sur Cloudinary:', { 
+      url: imageUrl, 
+      publicId,
+      fileInfo: req.file
+    });
+    
+    // Vérifier si l'image a bien été téléchargée sur Cloudinary
+    try {
+      // Vérifier que l'image existe sur Cloudinary
+      const cloudinaryResult = await cloudinary.api.resource(publicId);
+      console.log('📄 Vérification Cloudinary réussie:', cloudinaryResult);
+    } catch (cloudinaryError) {
+      console.error('❌ Erreur lors de la vérification Cloudinary:', cloudinaryError);
+      // Continuer malgré l'erreur pour le diagnostic
+    }
     
     // Rechercher le cluster
+    console.log('📄 Recherche du cluster:', clusterId);
     const cluster = await Cluster.findById(clusterId);
     if (!cluster) {
+      console.error('❌ Cluster non trouvé:', clusterId);
       // Supprimer l'image de Cloudinary si le cluster n'existe pas
-      await cloudinary.uploader.destroy(publicId);
+      try {
+        await cloudinary.uploader.destroy(publicId);
+        console.log('📄 Image supprimée de Cloudinary après échec de recherche du cluster');
+      } catch (deleteError) {
+        console.error('❌ Erreur lors de la suppression de l\'image après échec:', deleteError);
+      }
       return res.status(404).json({ message: 'Cluster non trouvé' });
     }
+    console.log('📄 Cluster trouvé:', cluster._id);
     
     // Initialiser la structure d'images si elle n'existe pas
     if (!cluster.images) {
+      console.log('📄 Initialisation de la structure d\'images pour le cluster');
       cluster.images = {
         gallery: []
       };
     }
     
     // Mettre à jour selon le type d'image
+    console.log('📄 Type d\'image à traiter:', type);
     switch (type) {
       case 'featured':
         // Supprimer l'ancienne image de Cloudinary si elle existe
@@ -95,7 +139,14 @@ export const addImage = async (req, res) => {
     }
     
     // Sauvegarder les changements
-    await cluster.save();
+    console.log('📄 Sauvegarde des changements au cluster');
+    try {
+      await cluster.save();
+      console.log('📄 Cluster sauvegardé avec succès');
+    } catch (saveError) {
+      console.error('❌ Erreur lors de la sauvegarde du cluster:', saveError);
+      throw saveError;
+    }
     
     res.status(200).json({
       message: 'Image téléchargée avec succès',
@@ -104,20 +155,23 @@ export const addImage = async (req, res) => {
       type
     });
   } catch (error) {
-    console.error('Erreur lors de l\'ajout de l\'image:', error);
+    console.error('❌ Erreur lors de l\'ajout de l\'image:', error);
+    console.error('❌ Stack trace:', error.stack);
     
     // Essayer de supprimer l'image de Cloudinary en cas d'erreur
     if (req.file && req.file.filename) {
       try {
         await cloudinary.uploader.destroy(req.file.filename);
+        console.log('📄 Image supprimée de Cloudinary après échec général');
       } catch (deleteError) {
-        console.error('Erreur lors de la suppression de l\'image après échec:', deleteError);
+        console.error('❌ Erreur lors de la suppression de l\'image après échec:', deleteError);
       }
     }
     
     res.status(500).json({
       message: 'Erreur lors du téléchargement de l\'image',
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };
