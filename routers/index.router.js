@@ -12,6 +12,7 @@ import uploadRouter from '../routes/upload.routes.js';
 import dashboardRouter from './dashboard.router.js';
 import exportRouter from './export.router.js';
 import restaurantRouter from '../routes/restaurant.routes.js';
+import nightclubRouter from './nightclub.router.js';
 
 const router = express.Router();
 
@@ -53,6 +54,9 @@ router.use('/exports', exportRouter);
 
 // Routes pour les restaurants
 router.use('/restaurant', restaurantRouter);
+
+// Routes pour les boîtes de nuit
+router.use('/nightclub', nightclubRouter);
 
 export default router;
 

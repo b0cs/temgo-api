@@ -243,7 +243,7 @@ const clusterSchema = new Schema({
   type: { 
     type: String, 
     required: true, 
-    enum: ['HairSalon', 'BeautySalon', 'Restaurant', 'Bar', 'Cultural'] 
+    enum: ['HairSalon', 'BeautySalon', 'Restaurant', 'Bar', 'Cultural', 'Nightclub'] 
   },
   address: { type: String },
   geolocation: {
@@ -285,6 +285,20 @@ const clusterSchema = new Schema({
   reviews: [{ type: Schema.Types.ObjectId, ref: 'Review' }], // Référence aux avis laissés par les clients
   isActive: { type: Boolean, default: true, required: true }, // Indique si le cluster est actif
   customUrl: { type: String, unique: true, sparse: true }, // URL personnalisée pour le cluster, optionnellement unique
+  
+  // Si le type est une boîte de nuit, informations supplémentaires
+  nightclubInfo: {
+    totalCapacity: { type: Number, default: 0 }, // Capacité totale de la boîte
+    currentOccupancy: { type: Number, default: 0 }, // Nombre actuel de personnes dans la boîte
+    doorPolicy: { type: String }, // Politique d'entrée (description des critères)
+    standardEntryFee: { type: Number, default: 0 }, // Prix d'entrée standard
+    vipEntryFee: { type: Number, default: 0 }, // Prix d'entrée VIP
+    occupancyHistory: [{ 
+      date: { type: Date }, 
+      maxOccupancy: { type: Number },
+      notes: { type: String }
+    }] // Historique de fréquentation pour analyse
+  },
 }, {
   timestamps: true // Ajoute les champs createdAt et updatedAt automatiquement
 });

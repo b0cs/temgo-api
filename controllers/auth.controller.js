@@ -3,19 +3,9 @@ import Cluster from '../models/cluster.model.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
-import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
 dotenv.config();
-
-// Configuration de nodemailer (à remplacer par vos informations SMTP réelles)
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'votre-email@gmail.com',
-    pass: process.env.EMAIL_PASS || 'votre-mot-de-passe'
-  }
-});
 
 // Générer un token JWT
 const generateToken = (userId) => {
@@ -73,35 +63,15 @@ export const registerCluster = async (req, res) => {
 
     await newAdmin.save();
 
-    // Envoyer l'email de bienvenue avec les informations de connexion
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: adminEmail,
-      subject: 'Bienvenue sur Temgo - Vos identifiants de connexion',
-      html: `
-        <h1>Bienvenue sur Temgo!</h1>
-        <p>Votre établissement a été créé avec succès.</p>
-        <p>Voici vos identifiants de connexion:</p>
-        <ul>
-          <li><strong>Email:</strong> ${adminEmail}</li>
-          <li><strong>Mot de passe temporaire:</strong> ${tempPassword}</li>
-        </ul>
-        <p>Nous vous recommandons de changer votre mot de passe dès votre première connexion.</p>
-        <p>Cordialement,<br>L'équipe Temgo</p>
-      `
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error('Erreur d\'envoi email:', error);
-      }
-    });
-
     res.status(201).json({
       message: 'Établissement et administrateur créés avec succès',
       cluster: {
         id: savedCluster._id,
         name: savedCluster.name
+      },
+      admin: {
+        email: adminEmail,
+        password: tempPassword // Inclure le mot de passe temporaire dans la réponse
       }
     });
   } catch (error) {
@@ -168,10 +138,10 @@ export const login = async (req, res) => {
  */
 export const createEmployee = async (req, res) => {
   try {
-    const { email, firstName, lastName, phone, role = 'employee' } = req.body;
+    const { email, firstName, lastName, phone, role = 'employee', cluster: requestedCluster, permissions: requestedPermissions } = req.body;
     
-    // L'ID du cluster est celui de l'utilisateur connecté
-    const clusterId = req.user.cluster;
+    // L'ID du cluster est celui spécifié dans la requête ou, par défaut, celui de l'utilisateur connecté
+    const clusterId = requestedCluster || req.user.cluster;
     
     // Vérifier que l'utilisateur connecté a les droits pour créer un employé
     if (!req.user.permissions.canManageEmployees) {
@@ -188,42 +158,25 @@ export const createEmployee = async (req, res) => {
     const tempPassword = crypto.randomBytes(8).toString('hex');
     
     // Créer le nouvel employé
-    const newEmployee = new User({
+    const newEmployeeData = {
       email,
-      password: tempPassword,
+      password: tempPassword, // Sera haché par le middleware du modèle
       firstName,
       lastName,
       phone,
       role,
       cluster: clusterId,
-      createdBy: req.user.id
-    });
-    
-    await newEmployee.save();
-    
-    // Envoyer l'email avec les identifiants
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'Vos identifiants de connexion Temgo',
-      html: `
-        <h1>Bienvenue sur Temgo!</h1>
-        <p>Un compte a été créé pour vous.</p>
-        <p>Voici vos identifiants de connexion:</p>
-        <ul>
-          <li><strong>Email:</strong> ${email}</li>
-          <li><strong>Mot de passe temporaire:</strong> ${tempPassword}</li>
-        </ul>
-        <p>Nous vous recommandons de changer votre mot de passe dès votre première connexion.</p>
-        <p>Cordialement,<br>L'équipe Temgo</p>
-      `
+      createdBy: req.user ? req.user.id : null
     };
     
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error('Erreur d\'envoi email:', error);
-      }
-    });
+    // Ajouter les permissions si elles sont spécifiées
+    if (requestedPermissions) {
+      newEmployeeData.permissions = requestedPermissions;
+    }
+    
+    const newEmployee = new User(newEmployeeData);
+    
+    await newEmployee.save();
     
     res.status(201).json({
       message: 'Employé créé avec succès',
@@ -232,7 +185,10 @@ export const createEmployee = async (req, res) => {
         email: newEmployee.email,
         firstName: newEmployee.firstName,
         lastName: newEmployee.lastName,
-        role: newEmployee.role
+        role: newEmployee.role,
+        password: tempPassword, // Renvoyer le mot de passe temporaire pour la première connexion
+        cluster: newEmployee.cluster,
+        permissions: newEmployee.permissions
       }
     });
   } catch (error) {
@@ -374,28 +330,13 @@ export const forgotPassword = async (req, res) => {
     // URL de réinitialisation (à adapter selon votre frontend)
     const resetURL = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
     
-    // Envoyer l'email de réinitialisation
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: 'Réinitialisation de mot de passe Temgo',
-      html: `
-        <h1>Réinitialisation de mot de passe</h1>
-        <p>Vous avez demandé une réinitialisation de mot de passe.</p>
-        <p>Cliquez sur le lien ci-dessous pour réinitialiser votre mot de passe (valide 1 heure):</p>
-        <a href="${resetURL}">Réinitialiser mon mot de passe</a>
-        <p>Si vous n'avez pas fait cette demande, veuillez ignorer cet email.</p>
-        <p>Cordialement,<br>L'équipe Temgo</p>
-      `
-    };
-    
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error('Erreur d\'envoi email:', error);
-      }
+    // Retourner directement le token et l'URL
+    res.status(200).json({ 
+      message: 'Token de réinitialisation généré avec succès',
+      token: resetToken,
+      resetURL: resetURL,
+      expiresIn: '1 heure'
     });
-    
-    res.status(200).json({ message: 'Si cet email existe, un lien de réinitialisation sera envoyé' });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la demande de réinitialisation: ' + error.message });
   }
@@ -451,5 +392,70 @@ export const getMe = async (req, res) => {
     res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la récupération des informations: ' + error.message });
+  }
+};
+
+/**
+ * Créer un administrateur sans requérir d'authentification préalable (pour les tests et l'initialisation)
+ * Cette fonction devrait être sécurisée ou désactivée en production
+ */
+export const createAdmin = async (req, res) => {
+  try {
+    const { email, firstName, lastName, phone, password, cluster: clusterId, permissions } = req.body;
+    
+    if (!email || !firstName || !lastName || !clusterId) {
+      return res.status(400).json({ message: 'Email, prénom, nom et cluster sont requis' });
+    }
+    
+    // Vérifier si l'email est déjà utilisé
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Cet email est déjà utilisé' });
+    }
+    
+    // Vérifier si le cluster existe
+    const clusterExists = await Cluster.findById(clusterId);
+    if (!clusterExists) {
+      return res.status(404).json({ message: 'Cluster non trouvé' });
+    }
+    
+    // Utiliser le mot de passe fourni ou en générer un aléatoire
+    const userPassword = password || crypto.randomBytes(8).toString('hex');
+    
+    // Créer le nouvel administrateur
+    const newAdminData = {
+      email,
+      password: userPassword, // Sera haché par le middleware du modèle
+      firstName,
+      lastName,
+      phone,
+      role: 'admin', // Toujours créer avec le rôle admin
+      cluster: clusterId
+    };
+    
+    // Ajouter les permissions si elles sont spécifiées, sinon utiliser les permissions d'admin par défaut
+    if (permissions) {
+      newAdminData.permissions = permissions;
+    }
+    
+    const newAdmin = new User(newAdminData);
+    
+    await newAdmin.save();
+    
+    res.status(201).json({
+      message: 'Administrateur créé avec succès',
+      admin: {
+        id: newAdmin._id,
+        email: newAdmin.email,
+        firstName: newAdmin.firstName,
+        lastName: newAdmin.lastName,
+        role: newAdmin.role,
+        password: userPassword, // Renvoyer le mot de passe pour la première connexion
+        cluster: newAdmin.cluster,
+        permissions: newAdmin.permissions
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la création de l\'administrateur: ' + error.message });
   }
 }; 
