@@ -409,7 +409,14 @@ export const getAllAppointmentsByDay = async (req, res) => {
                     price: 0,
                     duration: 30
                 },
-                employee: employeeDetails
+                employee: employeeDetails,
+                // Ajouter les champs qui pourraient être manquants
+                peopleCount: appointment.peopleCount || 1,
+                genderBreakdown: appointment.genderBreakdown || {
+                    maleCount: 0,
+                    femaleCount: 0,
+                    otherCount: 0
+                }
             };
             
             result.push(appointmentData);
@@ -424,6 +431,8 @@ export const getAllAppointmentsByDay = async (req, res) => {
         
         if (result.length > 0) {
             console.log(`Exemple de service: ${JSON.stringify(result[0].service)}`);
+            // Ajouter des logs pour le débogage
+            console.log(`Exemple de données de rendez-vous: peopleCount=${result[0].peopleCount}, genderBreakdown=${JSON.stringify(result[0].genderBreakdown)}`);
         }
         
         res.status(200).json(result);
