@@ -565,7 +565,7 @@ export const updateNightclubReservation = async (req, res) => {
           }
           
           // Ajouter le nombre d'invités à l'occupation actuelle
-          const guestCount = reservation.customerInfo.numberOfGuests || 1;
+          const guestCount = reservation.peopleCount || 1;
           nightclub.nightclubInfo.currentOccupancy = (nightclub.nightclubInfo.currentOccupancy || 0) + guestCount;
           
           // Vérifier si on dépasse la capacité maximale pour aujourd'hui
@@ -628,7 +628,7 @@ export const updateNightclubReservation = async (req, res) => {
           }
           
           // Soustraire le nombre d'invités de l'occupation actuelle
-          const guestCount = reservation.customerInfo.numberOfGuests || 1;
+          const guestCount = reservation.peopleCount || 1;
           nightclub.nightclubInfo.currentOccupancy = Math.max(
             0, 
             (nightclub.nightclubInfo.currentOccupancy || 0) - guestCount
@@ -731,7 +731,7 @@ export const cancelNightclubReservation = async (req, res) => {
         }
         
         // Soustraire le nombre d'invités de l'occupation actuelle
-        const guestCount = reservation.customerInfo.numberOfGuests || 1;
+        const guestCount = reservation.peopleCount || 1;
         nightclub.nightclubInfo.currentOccupancy = Math.max(
           0, 
           (nightclub.nightclubInfo.currentOccupancy || 0) - guestCount
@@ -1066,7 +1066,7 @@ export const getReservationGenderStats = async (req, res) => {
       maleCount: 0,
       femaleCount: 0,
       otherCount: 0,
-      totalGuests: reservation.customerInfo.numberOfGuests || 0
+      totalGuests: reservation.peopleCount || 0
     };
     
     // Si la réservation a déjà des statistiques de genre personnalisées, les utiliser
@@ -1084,7 +1084,7 @@ export const getReservationGenderStats = async (req, res) => {
         customerName: reservation.customerInfo.name,
         date: reservation.date,
         status: reservation.status,
-        numberOfGuests: reservation.customerInfo.numberOfGuests
+        numberOfGuests: reservation.peopleCount
       }
     });
   } catch (error) {
@@ -1103,69 +1103,78 @@ export const getReservationGenderStats = async (req, res) => {
 export const updateReservationGenderStats = async (req, res) => {
   try {
     const { reservationId } = req.params;
-    const { maleCount, femaleCount, otherCount } = req.body;
     
-    // Valider l'ID de réservation
-    if (!mongoose.Types.ObjectId.isValid(reservationId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'ID de réservation invalide'
-      });
+    if (!reservationId) {
+      return res.status(400).json({ message: 'ID de réservation requis' });
     }
     
-    // Récupérer la réservation
+    // Validation des données
+    const { maleCount, femaleCount, otherCount } = req.body;
+    
+    if (maleCount === undefined || femaleCount === undefined || otherCount === undefined) {
+      return res.status(400).json({ message: 'Les données de genre sont incomplètes' });
+    }
+    
+    // Convertir en nombre pour s'assurer que ce sont des entiers
+    const maleCountInt = parseInt(maleCount, 10);
+    const femaleCountInt = parseInt(femaleCount, 10);
+    const otherCountInt = parseInt(otherCount, 10);
+    
+    if (isNaN(maleCountInt) || isNaN(femaleCountInt) || isNaN(otherCountInt)) {
+      return res.status(400).json({ message: 'Les données de genre doivent être des nombres' });
+    }
+    
+    // Trouver la réservation
     const reservation = await NightclubReservation.findById(reservationId);
     
     if (!reservation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Réservation non trouvée'
-      });
+      return res.status(404).json({ message: 'Réservation non trouvée' });
     }
     
-    // Initialiser genderBreakdown s'il n'existe pas encore
+    // Initialiser genderBreakdown s'il n'existe pas
     if (!reservation.genderBreakdown) {
-      reservation.genderBreakdown = {
-        maleCount: 0,
-        femaleCount: 0,
-        otherCount: 0
-      };
+      reservation.genderBreakdown = {};
     }
     
-    // Valider que la somme des genres ne dépasse pas le nombre total d'invités
-    const totalGuests = reservation.customerInfo.numberOfGuests || 0;
-    const newTotal = (maleCount || 0) + (femaleCount || 0) + (otherCount || 0);
+    // Calculer le total pour vérifier la cohérence
+    const totalCount = maleCountInt + femaleCountInt + otherCountInt;
     
-    if (newTotal > totalGuests) {
-      return res.status(400).json({
-        success: false,
-        message: `Le nombre total de personnes par genre (${newTotal}) ne peut pas dépasser le nombre total d'invités (${totalGuests})`
+    // Vérifier que le total ne dépasse pas le nombre de personnes prévues
+    if (reservation.peopleCount && totalCount > reservation.peopleCount) {
+      return res.status(400).json({ 
+        message: `Le nombre total (${totalCount}) dépasse le nombre de personnes prévu (${reservation.peopleCount})` 
       });
     }
     
-    // Mettre à jour les compteurs de genre
-    if (maleCount !== undefined) reservation.genderBreakdown.maleCount = maleCount;
-    if (femaleCount !== undefined) reservation.genderBreakdown.femaleCount = femaleCount;
-    if (otherCount !== undefined) reservation.genderBreakdown.otherCount = otherCount;
+    // Mettre à jour les statistiques de genre
+    reservation.genderBreakdown = {
+      maleCount: maleCountInt,
+      femaleCount: femaleCountInt,
+      otherCount: otherCountInt
+    };
     
+    // Mettre à jour peopleCount si nécessaire pour assurer la cohérence
+    if (!reservation.peopleCount || reservation.peopleCount < totalCount) {
+      reservation.peopleCount = totalCount;
+    }
+    
+    // Sauvegarder la réservation mise à jour
     await reservation.save();
     
-    res.status(200).json({
+    // Répondre avec succès
+    return res.status(200).json({
       success: true,
       message: 'Statistiques de genre mises à jour avec succès',
-      genderBreakdown: reservation.genderBreakdown,
-      reservation: {
-        id: reservation._id,
-        customerName: reservation.customerInfo.name,
-        numberOfGuests: reservation.customerInfo.numberOfGuests
+      data: {
+        genderBreakdown: reservation.genderBreakdown,
+        peopleCount: reservation.peopleCount
       }
     });
   } catch (error) {
     console.error('Erreur lors de la mise à jour des statistiques de genre:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur serveur',
-      error: error.message
+    return res.status(500).json({ 
+      message: 'Erreur lors de la mise à jour des statistiques de genre', 
+      error: error.message 
     });
   }
 }; 
