@@ -1,5 +1,5 @@
 import express from "express";
-import { bookAppointment, getAppointmentsByCluster, getAppointmentsByMember, getAllAppointmentsByDay, cancelAppointment, getAllAppointments, assignEmployeeToAppointment, getStaffByCluster, updateAppointmentAttendance, updateAppointment } from "../controllers/appointment.controller.js";
+import { bookAppointment, getAppointmentsByCluster, getAppointmentsByMember, getAllAppointmentsByDay, cancelAppointment, getAllAppointments, assignEmployeeToAppointment, getStaffByCluster, updateAppointmentAttendance, updateAppointment, updateAppointmentGenderStats } from "../controllers/appointment.controller.js";
 import { updateAppointmentStatus } from "../controllers/user.controller.js";
 import { authMiddleware, checkPermissions } from "../middleware/auth.middleware.js";
 import { createAppointment } from '../controllers/member.controller.js';
@@ -44,5 +44,8 @@ appointmentRouter.put("/update/:appointmentId", checkPermissions(['canManageAppo
 
 // Mettre à jour le statut de présence d'un rendez-vous (honoré, non honoré, annulé)
 appointmentRouter.put("/attendance/:appointmentId", checkPermissions(['canManageAppointments']), updateAppointmentAttendance);
+
+// Ajouter la route pour mettre à jour les statistiques de genre
+appointmentRouter.put('/:appointmentId/gender-stats', updateAppointmentGenderStats);
 
 export default appointmentRouter;

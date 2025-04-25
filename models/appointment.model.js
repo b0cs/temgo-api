@@ -23,6 +23,13 @@ const appointmentSchema = new Schema({
     rescheduledFrom: { type: Schema.Types.ObjectId, ref: 'Appointment' }, // Si ce RDV est un report d'un autre
     cancellationReason: { type: String }, // Raison d'annulation
     noShowCount: { type: Number, default: 0 }, // Nombre de fois où le client ne s'est pas présenté
+    peopleCount: { type: Number, default: 1 }, // Nombre de personnes pour la réservation (notamment pour les boîtes de nuit)
+    genderBreakdown: { // Répartition des genres pour les boîtes de nuit
+        maleCount: { type: Number, default: 0 },
+        femaleCount: { type: Number, default: 0 },
+        otherCount: { type: Number, default: 0 }
+    },
+    tableNumber: { type: String } // Numéro de table pour les restaurants ou boîtes de nuit
 }, { timestamps: true });
 
 appointmentSchema.index({ startTime: 1, endTime: 1, cluster: 1, member: 1, service: 1 });

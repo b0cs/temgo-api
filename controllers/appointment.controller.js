@@ -13,9 +13,26 @@ import User from "../models/user.model.js";
  * @param {Object} res Réponse HTTP
  */
 export const bookAppointment = async (req, res) => {
-    const { clusterId, memberId, serviceId, startTime, peopleCount, employeeId } = req.body;
-
     try {
+        // Extraction des données de la requête
+        const {
+            clusterId,
+            memberId,
+            serviceId,
+            startTime,
+            endTime,
+            employeeId,
+            notes,
+            peopleCount,
+            genderBreakdown,
+            tableNumber
+        } = req.body;
+
+        // Vérification des champs obligatoires
+        if (!clusterId || !memberId || !serviceId || !startTime || !endTime) {
+            return res.status(400).json({ message: "Missing required fields" });
+        }
+
         // Vérifier si la date est dans le passé
         const currentTime = new Date();
         const start = new Date(startTime);
@@ -52,13 +69,17 @@ export const bookAppointment = async (req, res) => {
             service: serviceId,
             startTime: start,
             endTime: end,
-            employee: employeeId // Ajouter l'employé si fourni
+            employee: employeeId,
+            notes,
+            peopleCount: peopleCount || 1,
+            genderBreakdown: genderBreakdown || {},
+            tableNumber
         });
 
         // Enregistrer le rendez-vous
-        await newAppointment.save();
+        const appointment = await newAppointment.save();
 
-        res.status(201).json({ message: 'Appointment booked successfully', appointment: newAppointment });
+        res.status(201).json({ appointment });
     } catch (error) {
         console.error('Error booking the appointment:', error);
         res.status(500).json({ message: 'Error booking the appointment: ' + error.message });
@@ -759,4 +780,81 @@ export const updateAppointment = async (req, res) => {
         message: error.message || 'Erreur lors de la mise à jour du rendez-vous'
       });
     }
+};
+
+/**
+ * Mettre à jour les statistiques de genre pour un rendez-vous
+ * @route PUT /api/appointment/:appointmentId/gender-stats
+ */
+export const updateAppointmentGenderStats = async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    
+    // Valider l'ID du rendez-vous
+    if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+      return res.status(400).json({ message: 'ID de rendez-vous invalide' });
+    }
+    
+    // Récupérer les données du corps de la requête
+    const { maleCount, femaleCount, otherCount } = req.body;
+    
+    if (maleCount === undefined || femaleCount === undefined || otherCount === undefined) {
+      return res.status(400).json({ message: 'Les données de genre sont incomplètes' });
+    }
+    
+    // Convertir en nombre pour s'assurer que ce sont des entiers
+    const maleCountInt = parseInt(maleCount, 10);
+    const femaleCountInt = parseInt(femaleCount, 10);
+    const otherCountInt = parseInt(otherCount, 10);
+    
+    if (isNaN(maleCountInt) || isNaN(femaleCountInt) || isNaN(otherCountInt)) {
+      return res.status(400).json({ message: 'Les données de genre doivent être des nombres' });
+    }
+    
+    // Trouver le rendez-vous
+    const appointment = await Appointment.findById(appointmentId);
+    
+    if (!appointment) {
+      return res.status(404).json({ message: 'Rendez-vous non trouvé' });
+    }
+    
+    // Calculer le total pour vérifier la cohérence
+    const totalCount = maleCountInt + femaleCountInt + otherCountInt;
+    
+    // Initialiser genderBreakdown si nécessaire
+    if (!appointment.genderBreakdown) {
+      appointment.genderBreakdown = {
+        maleCount: 0,
+        femaleCount: 0,
+        otherCount: 0
+      };
+    }
+    
+    // Mettre à jour les statistiques de genre
+    appointment.genderBreakdown.maleCount = maleCountInt;
+    appointment.genderBreakdown.femaleCount = femaleCountInt;
+    appointment.genderBreakdown.otherCount = otherCountInt;
+    
+    // Mettre à jour peopleCount si nécessaire pour assurer la cohérence
+    if (!appointment.peopleCount || appointment.peopleCount < totalCount) {
+      appointment.peopleCount = totalCount;
+    }
+    
+    await appointment.save();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Statistiques de genre mises à jour avec succès',
+      data: {
+        genderBreakdown: appointment.genderBreakdown,
+        peopleCount: appointment.peopleCount
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour des statistiques de genre:', error);
+    res.status(500).json({ 
+      message: 'Erreur lors de la mise à jour des statistiques de genre', 
+      error: error.message 
+    });
+  }
 };

@@ -489,4 +489,40 @@ export const deleteStaff = async (req, res) => {
         console.error('Erreur dans deleteStaff:', error);
         res.status(500).json({ message: 'Erreur lors de la suppression du staff', error: error.message });
     }
+};
+
+/**
+ * Crée un rendez-vous
+ */
+export const bookAppointment = async (req, res) => {
+    try {
+        const { 
+            clusterId, memberId, serviceId, startTime, endTime, 
+            employeeId, notes, peopleCount, genderBreakdown, tableNumber 
+        } = req.body;
+        
+        // Validation des données...
+        
+        // Création du rendez-vous
+        const appointment = new Appointment({
+            cluster: clusterId,
+            member: memberId,
+            service: serviceId,
+            startTime,
+            endTime,
+            employee: employeeId,
+            notes,
+            peopleCount: peopleCount || 1, // Utiliser le nombre de personnes fourni ou 1 par défaut
+            genderBreakdown: genderBreakdown || {}, // Utiliser la répartition par genre si fournie
+            tableNumber // Stocker le numéro de table si fourni
+        });
+        
+        // Enregistrement du rendez-vous
+        const savedAppointment = await appointment.save();
+        
+        // Reste du code existant...
+    } catch (error) {
+        console.error('Erreur dans bookAppointment:', error);
+        res.status(500).json({ message: 'Erreur lors de la création du rendez-vous', error: error.message });
+    }
 }; 
