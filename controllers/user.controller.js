@@ -489,7 +489,7 @@ export const deleteStaff = async (req, res) => {
         console.error('Erreur dans deleteStaff:', error);
         res.status(500).json({ message: 'Erreur lors de la suppression du staff', error: error.message });
     }
-};
+}; 
 
 /**
  * Crée un rendez-vous
