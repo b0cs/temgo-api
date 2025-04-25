@@ -14,7 +14,9 @@ import {
   checkTableAvailability,
   updateNightclubCapacity,
   updateNightclubOccupancy,
-  getNightclubOccupancyReport
+  getNightclubOccupancyReport,
+  updateGenderStats,
+  updateReservationGenderStats
 } from '../controllers/nightclub.controller.js';
 
 import {
@@ -37,6 +39,7 @@ nightclubRouter.get('/clubs/:clusterId', getNightclubDetails);
 nightclubRouter.put('/clubs/:clusterId/capacity', updateNightclubCapacity);
 nightclubRouter.put('/clubs/:clusterId/occupancy', updateNightclubOccupancy);
 nightclubRouter.get('/clubs/:clusterId/occupancy-report', getNightclubOccupancyReport);
+nightclubRouter.put('/clubs/:id/gender-stats', updateGenderStats);
 
 // Routes pour les tables
 nightclubRouter.get('/clubs/:clusterId/tables', getNightclubTables);
@@ -51,6 +54,7 @@ nightclubRouter.get('/clubs/:clusterId/reservations', getNightclubReservations);
 nightclubRouter.get('/reservations/:reservationId', getNightclubReservationById);
 nightclubRouter.put('/reservations/:reservationId', updateNightclubReservation);
 nightclubRouter.put('/reservations/:reservationId/cancel', cancelNightclubReservation);
+nightclubRouter.put('/reservations/:reservationId/gender-stats', updateReservationGenderStats);
 
 // Routes pour les événements
 nightclubRouter.post('/clubs/:clusterId/events', createNightclubEvent);

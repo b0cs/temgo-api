@@ -15,9 +15,14 @@ const nightclubReservationSchema = new Schema({
     name: { type: String, required: true }, // Nom du client principal
     email: { type: String, required: true }, // Email pour confirmation
     phone: { type: String, required: true }, // Téléphone pour contact
-    numberOfGuests: { type: Number, required: true }, // Nombre de personnes
+    numberOfGuests: { type: Number, default: 1 }, // Nombre de personnes
     guestNames: [{ type: String }], // Noms des invités (pour liste d'invités)
-    notes: { type: String } // Notes spécifiques du client
+    notes: { type: String }, // Notes spécifiques du client
+    genderBreakdown: {
+      maleCount: { type: Number, default: 0 },
+      femaleCount: { type: Number, default: 0 },
+      otherCount: { type: Number, default: 0 }
+    }
   },
   
   // Informations temporelles

@@ -882,124 +882,66 @@ export const updateNightclubCapacity = async (req, res) => {
  */
 export const updateNightclubOccupancy = async (req, res) => {
   try {
-    const { clusterId } = req.params;
-    const { currentOccupancy, addToOccupancy, removeFromOccupancy, notes } = req.body;
-    
-    // Valider l'ID
-    if (!mongoose.Types.ObjectId.isValid(clusterId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'ID de boîte de nuit invalide'
+    const clubId = req.params.id;
+    const { newOccupancy, maxOccupancy, notes, date } = req.body;
+
+    const club = await Cluster.findById(clubId);
+    if (!club || !club.nightclubInfo) {
+      return res.status(404).json({ error: 'Club not found or nightclub info not initialized' });
+    }
+
+    // Met à jour l'occupation actuelle
+    club.nightclubInfo.currentOccupancy = newOccupancy;
+
+    // Enregistre l'historique d'occupation si maxOccupancy est fourni
+    if (maxOccupancy) {
+      club.nightclubInfo.occupancyHistory.push({
+        date: date || new Date(),
+        maxOccupancy,
+        notes
       });
     }
-    
-    // Récupérer la boîte de nuit
-    const nightclub = await Cluster.findById(clusterId);
-    
-    if (!nightclub) {
-      return res.status(404).json({
-        success: false,
-        message: 'Boîte de nuit non trouvée'
-      });
-    }
-    
-    // Vérifier que c'est bien une boîte de nuit
-    if (nightclub.type !== 'Nightclub') {
-      return res.status(400).json({
-        success: false,
-        message: 'Ce cluster n\'est pas une boîte de nuit'
-      });
-    }
-    
-    // Initialiser le champ nightclubInfo s'il n'existe pas encore
-    if (!nightclub.nightclubInfo) {
-      nightclub.nightclubInfo = { currentOccupancy: 0, totalCapacity: 0 };
-    }
-    
-    let updatedOccupancy = nightclub.nightclubInfo.currentOccupancy || 0;
-    
-    // Mise à jour directe
-    if (currentOccupancy !== undefined) {
-      updatedOccupancy = currentOccupancy;
-    } else {
-      // Ajout ou retrait d'un nombre de personnes
-      if (addToOccupancy) {
-        updatedOccupancy += parseInt(addToOccupancy);
-      }
-      
-      if (removeFromOccupancy) {
-        updatedOccupancy -= parseInt(removeFromOccupancy);
-      }
-    }
-    
-    // Vérifier que l'occupation n'est pas négative
-    updatedOccupancy = Math.max(0, updatedOccupancy);
-    
-    // Mettre à jour l'occupation actuelle
-    nightclub.nightclubInfo.currentOccupancy = updatedOccupancy;
-    
-    // Si on dépasse la capacité maximale historique pour aujourd'hui, enregistrer dans l'historique
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (!nightclub.nightclubInfo.occupancyHistory) {
-      nightclub.nightclubInfo.occupancyHistory = [];
-    }
-    
-    const todayRecord = nightclub.nightclubInfo.occupancyHistory.find(record => {
-      const recordDate = new Date(record.date);
-      recordDate.setHours(0, 0, 0, 0);
-      return recordDate.getTime() === today.getTime();
-    });
-    
-    if (!todayRecord) {
-      // Créer un nouvel enregistrement pour aujourd'hui
-      nightclub.nightclubInfo.occupancyHistory.push({
-        date: today,
-        maxOccupancy: updatedOccupancy,
-        notes: notes || 'Occupation initiale'
-      });
-    } else if (updatedOccupancy > todayRecord.maxOccupancy) {
-      // Mettre à jour le maximum si on dépasse
-      todayRecord.maxOccupancy = updatedOccupancy;
-      if (notes) {
-        todayRecord.notes = notes;
-      }
-    }
-    
-    await nightclub.save();
-    
-    // Vérifier si on approche ou dépasse la capacité
-    let warning = null;
-    const totalCapacity = nightclub.nightclubInfo.totalCapacity || 0;
-    
-    if (totalCapacity > 0) {
-      const occupancyRate = (updatedOccupancy / totalCapacity) * 100;
-      
-      if (occupancyRate >= 100) {
-        warning = 'ATTENTION: La boîte de nuit a atteint sa capacité maximale!';
-      } else if (occupancyRate >= 90) {
-        warning = 'ATTENTION: La boîte de nuit est presque à sa capacité maximale (>90%).';
-      } else if (occupancyRate >= 80) {
-        warning = 'La boîte de nuit est à plus de 80% de sa capacité.';
-      }
-    }
-    
-    res.status(200).json({
-      success: true,
-      message: 'Occupation mise à jour avec succès',
-      currentOccupancy: updatedOccupancy,
-      totalCapacity: nightclub.nightclubInfo.totalCapacity || 0,
-      occupancyRate: totalCapacity > 0 ? Math.round((updatedOccupancy / totalCapacity) * 100) : 0,
-      warning
-    });
+
+    await club.save();
+    res.status(200).json(club.nightclubInfo);
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de l\'occupation:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur serveur',
-      error: error.message
-    });
+    console.error('Error updating nightclub occupancy:', error);
+    res.status(500).json({ error: 'Failed to update nightclub occupancy' });
+  }
+};
+
+/**
+ * Mettre à jour les statistiques de genre pour la boîte de nuit
+ */
+export const updateGenderStats = async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    const { maleCount, femaleCount, otherCount } = req.body;
+
+    const club = await Cluster.findById(clubId);
+    if (!club || !club.nightclubInfo) {
+      return res.status(404).json({ error: 'Club not found or nightclub info not initialized' });
+    }
+
+    // Initialiser genderStats s'il n'existe pas encore
+    if (!club.nightclubInfo.genderStats) {
+      club.nightclubInfo.genderStats = {
+        maleCount: 0,
+        femaleCount: 0,
+        otherCount: 0
+      };
+    }
+
+    // Mettre à jour les compteurs de genre
+    if (maleCount !== undefined) club.nightclubInfo.genderStats.maleCount = maleCount;
+    if (femaleCount !== undefined) club.nightclubInfo.genderStats.femaleCount = femaleCount;
+    if (otherCount !== undefined) club.nightclubInfo.genderStats.otherCount = otherCount;
+
+    await club.save();
+    res.status(200).json(club.nightclubInfo.genderStats);
+  } catch (error) {
+    console.error('Error updating gender statistics:', error);
+    res.status(500).json({ error: 'Failed to update gender statistics' });
   }
 };
 
@@ -1086,6 +1028,140 @@ export const getNightclubOccupancyReport = async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur lors de la récupération du rapport d\'occupation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Récupérer les statistiques de genre pour une réservation spécifique
+ */
+export const getReservationGenderStats = async (req, res) => {
+  try {
+    const { reservationId } = req.params;
+    
+    // Valider l'ID de réservation
+    if (!mongoose.Types.ObjectId.isValid(reservationId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de réservation invalide'
+      });
+    }
+    
+    // Récupérer la réservation
+    const reservation = await NightclubReservation.findById(reservationId);
+    
+    if (!reservation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Réservation non trouvée'
+      });
+    }
+    
+    // Vérifier si des statistiques de genre existent déjà
+    const genderStats = {
+      maleCount: 0,
+      femaleCount: 0,
+      otherCount: 0,
+      totalGuests: reservation.customerInfo.numberOfGuests || 0
+    };
+    
+    // Si la réservation a déjà des statistiques de genre personnalisées, les utiliser
+    if (reservation.genderBreakdown) {
+      genderStats.maleCount = reservation.genderBreakdown.maleCount || 0;
+      genderStats.femaleCount = reservation.genderBreakdown.femaleCount || 0;
+      genderStats.otherCount = reservation.genderBreakdown.otherCount || 0;
+    }
+    
+    res.status(200).json({
+      success: true,
+      genderStats,
+      reservation: {
+        id: reservation._id,
+        customerName: reservation.customerInfo.name,
+        date: reservation.date,
+        status: reservation.status,
+        numberOfGuests: reservation.customerInfo.numberOfGuests
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques de genre:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur serveur',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Mettre à jour les statistiques de genre pour une réservation spécifique
+ */
+export const updateReservationGenderStats = async (req, res) => {
+  try {
+    const { reservationId } = req.params;
+    const { maleCount, femaleCount, otherCount } = req.body;
+    
+    // Valider l'ID de réservation
+    if (!mongoose.Types.ObjectId.isValid(reservationId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de réservation invalide'
+      });
+    }
+    
+    // Récupérer la réservation
+    const reservation = await NightclubReservation.findById(reservationId);
+    
+    if (!reservation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Réservation non trouvée'
+      });
+    }
+    
+    // Initialiser genderBreakdown s'il n'existe pas encore
+    if (!reservation.genderBreakdown) {
+      reservation.genderBreakdown = {
+        maleCount: 0,
+        femaleCount: 0,
+        otherCount: 0
+      };
+    }
+    
+    // Valider que la somme des genres ne dépasse pas le nombre total d'invités
+    const totalGuests = reservation.customerInfo.numberOfGuests || 0;
+    const newTotal = (maleCount || 0) + (femaleCount || 0) + (otherCount || 0);
+    
+    if (newTotal > totalGuests) {
+      return res.status(400).json({
+        success: false,
+        message: `Le nombre total de personnes par genre (${newTotal}) ne peut pas dépasser le nombre total d'invités (${totalGuests})`
+      });
+    }
+    
+    // Mettre à jour les compteurs de genre
+    if (maleCount !== undefined) reservation.genderBreakdown.maleCount = maleCount;
+    if (femaleCount !== undefined) reservation.genderBreakdown.femaleCount = femaleCount;
+    if (otherCount !== undefined) reservation.genderBreakdown.otherCount = otherCount;
+    
+    await reservation.save();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Statistiques de genre mises à jour avec succès',
+      genderBreakdown: reservation.genderBreakdown,
+      reservation: {
+        id: reservation._id,
+        customerName: reservation.customerInfo.name,
+        numberOfGuests: reservation.customerInfo.numberOfGuests
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour des statistiques de genre:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur serveur',
