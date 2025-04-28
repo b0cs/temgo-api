@@ -16,6 +16,15 @@ const generateToken = (userId) => {
   );
 };
 
+// Générer un refresh token avec une plus longue durée de vie
+const generateRefreshToken = (userId) => {
+  return jwt.sign(
+    { id: userId },
+    process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET || 'votre-secret-jwt',
+    { expiresIn: '30d' }
+  );
+};
+
 /**
  * Inscription d'un nouvel établissement (admin)
  * Endpoint uniquement accessible par super admin
@@ -80,6 +89,59 @@ export const registerCluster = async (req, res) => {
 };
 
 /**
+ * Rafraîchir le token d'accès à l'aide du refresh token
+ */
+export const refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      return res.status(400).json({ message: 'Refresh token requis' });
+    }
+    
+    try {
+      // Vérifier le refresh token
+      const decoded = jwt.verify(
+        refreshToken, 
+        process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET || 'votre-secret-jwt'
+      );
+      
+      // Trouver l'utilisateur
+      const user = await User.findById(decoded.id);
+      if (!user) {
+        return res.status(401).json({ message: 'Utilisateur non trouvé' });
+      }
+      
+      // Vérifier si l'utilisateur est actif
+      if (!user.isActive) {
+        return res.status(403).json({ message: 'Compte désactivé' });
+      }
+      
+      // Générer un nouveau access token
+      const accessToken = generateToken(user._id);
+      
+      // Générer un nouveau refresh token (rotation des tokens)
+      const newRefreshToken = generateRefreshToken(user._id);
+      
+      res.status(200).json({
+        accessToken,
+        refreshToken: newRefreshToken
+      });
+    } catch (error) {
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ message: 'Refresh token invalide' });
+      }
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ message: 'Refresh token expiré' });
+      }
+      throw error;
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors du rafraîchissement du token: ' + error.message });
+  }
+};
+
+/**
  * Connexion utilisateur
  */
 export const login = async (req, res) => {
@@ -114,10 +176,15 @@ export const login = async (req, res) => {
 
     // Générer le token JWT
     const token = generateToken(user._id);
+    
+    // Générer un refresh token
+    const refreshToken = generateRefreshToken(user._id);
 
     res.status(200).json({
       message: 'Connexion réussie',
       token,
+      accessToken: token,
+      refreshToken,
       user: {
         id: user._id,
         email: user.email,

@@ -1,6 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.middleware.js';
-import { login, createEmployee, getMe, createAdmin } from '../controllers/auth.controller.js';
+import { login, createEmployee, getMe, createAdmin, refreshToken } from '../controllers/auth.controller.js';
 import { 
     getStaffsByCluster, 
     getStaffDetails, 
@@ -16,6 +16,8 @@ const authRouter = express.Router();
 authRouter.post('/login', login);
 // Route pour créer un admin sans authentification (pour les tests/initialisation)
 authRouter.post('/admin', createAdmin);
+// Route pour rafraîchir le token d'accès
+authRouter.post('/refresh', refreshToken);
 // Commentées pour l'instant car non implémentées
 // authRouter.post('/forgot-password', forgotPassword);
 // authRouter.post('/reset-password', resetPassword);
