@@ -46,8 +46,8 @@ export const createMember = async (req, res) => {
                 if (existingMember.role === 'client') {
                     // Vérifier si une relation existe déjà
                     const existingRelation = await ClientClusterRelation.findOne({
-                        client: existingMember._id,
-                        cluster
+                        clientId: existingMember._id,
+                        clusterId: cluster
                     });
                     
                     if (existingRelation) {
@@ -59,8 +59,8 @@ export const createMember = async (req, res) => {
                     
                     // Créer une nouvelle relation
                     const newRelation = new ClientClusterRelation({
-                        client: existingMember._id,
-                        cluster,
+                        clientId: existingMember._id,
+                        clusterId: cluster,
                         preferences: preferences || '',
                         joinedAt: new Date()
                     });
@@ -88,8 +88,8 @@ export const createMember = async (req, res) => {
                 if (existingMemberByPhone.role === 'client') {
                     // Vérifier si une relation existe déjà
                     const existingRelation = await ClientClusterRelation.findOne({
-                        client: existingMemberByPhone._id,
-                        cluster
+                        clientId: existingMemberByPhone._id,
+                        clusterId: cluster
                     });
                     
                     if (existingRelation) {
@@ -101,8 +101,8 @@ export const createMember = async (req, res) => {
                     
                     // Créer une nouvelle relation
                     const newRelation = new ClientClusterRelation({
-                        client: existingMemberByPhone._id,
-                        cluster,
+                        clientId: existingMemberByPhone._id,
+                        clusterId: cluster,
                         preferences: preferences || '',
                         joinedAt: new Date()
                     });
@@ -142,8 +142,8 @@ export const createMember = async (req, res) => {
         // Si c'est un client, créer également une relation avec le cluster
         if (savedMember.role === 'client') {
             const newRelation = new ClientClusterRelation({
-                client: savedMember._id,
-                cluster,
+                clientId: savedMember._id,
+                clusterId: cluster,
                 preferences: preferences || '',
                 joinedAt: new Date()
             });
@@ -480,15 +480,15 @@ export const createAppointment = async (req, res) => {
     
     // Vérifier si le client a une relation avec ce cluster
     const hasRelation = await ClientClusterRelation.findOne({ 
-      client: memberId, 
-      cluster: clusterId 
+      clientId: memberId, 
+      clusterId: clusterId 
     });
     
     // Si le membre est un client et qu'il n'a pas de relation avec ce cluster, créer une relation
     if (member.role === 'client' && !hasRelation) {
       const newRelation = new ClientClusterRelation({
-        client: memberId,
-        cluster: clusterId,
+        clientId: memberId,
+        clusterId: clusterId,
         joinedAt: new Date()
       });
       
