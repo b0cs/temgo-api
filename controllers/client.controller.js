@@ -1,4 +1,4 @@
-import Member from '../models/Member.js';
+import Member from '../models/member.model.js';
 import ClientClusterRelation from '../models/ClientClusterRelation.js';
 import mongoose from 'mongoose';
 
