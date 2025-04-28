@@ -13,7 +13,7 @@ import User from "../models/user.model.js";
 
 dotenv.config();
 export const createMember = async (req, res) => {
-    const { firstName, lastName, email, phone, passwordHash, role, cluster, preferences } = req.body;
+    const { firstName, lastName, email, phone, passwordHash, role, cluster, preferences, confirmed } = req.body;
     
     console.log("🔍 Tentative de création d'un membre avec les données:", {
         firstName, lastName, email, phone, cluster
@@ -37,88 +37,143 @@ export const createMember = async (req, res) => {
     
     try {
         // Vérifier si un membre avec cet email existe déjà
+        let existingMember = null;
+        
         if (email) {
-            const existingMember = await Member.findOne({ email });
+            existingMember = await Member.findOne({ email });
             if (existingMember) {
                 console.log(`❌ Un membre avec l'email ${email} existe déjà`);
                 
-                // Si le membre existe mais n'est pas encore associé à ce cluster, créer la relation
-                if (existingMember.role === 'client') {
-                    // Vérifier si une relation existe déjà
-                    const existingRelation = await ClientClusterRelation.findOne({
-                        clientId: existingMember._id,
-                        clusterId: cluster
-                    });
-                    
-                    if (existingRelation) {
-                        return res.status(400).json({ 
-                            message: `Ce client est déjà associé à cet établissement`,
-                            memberId: existingMember._id
+                // Vérifier si une relation existe déjà avec ce cluster
+                const existingRelation = await ClientClusterRelation.findOne({
+                    clientId: existingMember._id,
+                    clusterId: cluster
+                });
+                
+                if (existingRelation) {
+                    if (!existingRelation.isActive) {
+                        // Réactiver la relation si elle était désactivée
+                        existingRelation.isActive = true;
+                        await existingRelation.save();
+                        return res.status(200).json({ 
+                            message: "Client réactivé dans cet établissement",
+                            member: existingMember,
+                            relation: existingRelation
                         });
                     }
-                    
-                    // Créer une nouvelle relation
-                    const newRelation = new ClientClusterRelation({
-                        clientId: existingMember._id,
-                        clusterId: cluster,
-                        preferences: preferences || '',
-                        joinedAt: new Date()
-                    });
-                    
-                    await newRelation.save();
-                    
-                    return res.status(201).json({
-                        message: "Client existant ajouté à l'établissement",
-                        member: existingMember,
-                        relation: newRelation
+                    return res.status(409).json({ 
+                        message: "Ce client est déjà associé à cet établissement",
+                        memberId: existingMember._id,
+                        memberInfo: {
+                            firstName: existingMember.firstName,
+                            lastName: existingMember.lastName,
+                            email: existingMember.email,
+                            phone: existingMember.phone
+                        }
                     });
                 }
                 
-                return res.status(400).json({ message: `Un membre avec l'email ${email} existe déjà` });
+                // Si le client existe mais avec un flag confirmé absent, c'est une découverte et non une confirmation
+                if (!confirmed) {
+                    // Renvoyer les informations du client existant et demander une confirmation
+                    return res.status(428).json({
+                        message: "Un client avec cet email existe déjà. S'agit-il du même client ?",
+                        existingMember: {
+                            id: existingMember._id,
+                            firstName: existingMember.firstName,
+                            lastName: existingMember.lastName,
+                            email: existingMember.email,
+                            phone: existingMember.phone
+                        },
+                        requiresConfirmation: true,
+                        action: "confirm_existing_member"
+                    });
+                }
             }
         }
         
         // Vérifier si un membre avec ce numéro de téléphone existe déjà
-        if (phone) {
+        if (!existingMember && phone) {
             const existingMemberByPhone = await Member.findOne({ phone });
             if (existingMemberByPhone) {
                 console.log(`❌ Un membre avec le numéro de téléphone ${phone} existe déjà`);
                 
-                // Si le membre existe mais n'est pas encore associé à ce cluster, créer la relation
-                if (existingMemberByPhone.role === 'client') {
-                    // Vérifier si une relation existe déjà
-                    const existingRelation = await ClientClusterRelation.findOne({
-                        clientId: existingMemberByPhone._id,
-                        clusterId: cluster
-                    });
-                    
-                    if (existingRelation) {
-                        return res.status(400).json({ 
-                            message: `Ce client est déjà associé à cet établissement`,
-                            memberId: existingMemberByPhone._id
+                // Vérifier si une relation existe déjà
+                const existingRelation = await ClientClusterRelation.findOne({
+                    clientId: existingMemberByPhone._id,
+                    clusterId: cluster
+                });
+                
+                if (existingRelation) {
+                    if (!existingRelation.isActive) {
+                        // Réactiver la relation si elle était désactivée
+                        existingRelation.isActive = true;
+                        await existingRelation.save();
+                        return res.status(200).json({ 
+                            message: "Client réactivé dans cet établissement",
+                            member: existingMemberByPhone,
+                            relation: existingRelation
                         });
                     }
-                    
-                    // Créer une nouvelle relation
-                    const newRelation = new ClientClusterRelation({
-                        clientId: existingMemberByPhone._id,
-                        clusterId: cluster,
-                        preferences: preferences || '',
-                        joinedAt: new Date()
-                    });
-                    
-                    await newRelation.save();
-                    
-                    return res.status(201).json({
-                        message: "Client existant ajouté à l'établissement",
-                        member: existingMemberByPhone,
-                        relation: newRelation
+                    return res.status(409).json({ 
+                        message: "Ce client est déjà associé à cet établissement",
+                        memberId: existingMemberByPhone._id,
+                        memberInfo: {
+                            firstName: existingMemberByPhone.firstName,
+                            lastName: existingMemberByPhone.lastName,
+                            email: existingMemberByPhone.email,
+                            phone: existingMemberByPhone.phone
+                        }
                     });
                 }
                 
-                return res.status(400).json({ message: `Un membre avec le numéro de téléphone ${phone} existe déjà` });
+                // Si le client existe mais avec un flag confirmé absent, c'est une découverte et non une confirmation
+                if (!confirmed) {
+                    // Renvoyer les informations du client existant et demander une confirmation
+                    return res.status(428).json({
+                        message: "Un client avec ce numéro de téléphone existe déjà. S'agit-il du même client ?",
+                        existingMember: {
+                            id: existingMemberByPhone._id,
+                            firstName: existingMemberByPhone.firstName,
+                            lastName: existingMemberByPhone.lastName,
+                            email: existingMemberByPhone.email,
+                            phone: existingMemberByPhone.phone
+                        },
+                        requiresConfirmation: true,
+                        action: "confirm_existing_member"
+                    });
+                }
+                
+                // Si on arrive ici, c'est que l'utilisateur a confirmé qu'il s'agit du même client,
+                // donc on va le réutiliser
+                existingMember = existingMemberByPhone;
             }
         }
+        
+        // Traiter le cas où un client existant est confirmé
+        if (existingMember && confirmed) {
+            console.log(`✅ Réutilisation du client existant avec ID: ${existingMember._id}`);
+            
+            // Créer une nouvelle relation pour ce client avec le cluster actuel
+            const newRelation = new ClientClusterRelation({
+                clientId: existingMember._id,
+                clusterId: cluster,
+                preferences: preferences || '',
+                joinedAt: new Date(),
+                isActive: true
+            });
+            
+            await newRelation.save();
+            console.log("✅ Relation créée pour le client existant dans le nouvel établissement");
+            
+            return res.status(201).json({
+                message: "Client existant ajouté à l'établissement",
+                member: existingMember,
+                relation: newRelation
+            });
+        }
+        
+        // Si on arrive ici, c'est qu'on doit créer un nouveau client
         
         // Utiliser un mot de passe par défaut si non fourni
         const defaultPasswordHash = passwordHash || 'defaultPassword';
@@ -145,19 +200,24 @@ export const createMember = async (req, res) => {
                 clientId: savedMember._id,
                 clusterId: cluster,
                 preferences: preferences || '',
-                joinedAt: new Date()
+                joinedAt: new Date(),
+                isActive: true
             });
             
             await newRelation.save();
             console.log("✅ Relation client-cluster créée avec succès");
             
             return res.status(201).json({
+                message: "Nouveau client créé et ajouté à l'établissement",
                 member: savedMember,
                 relation: newRelation
             });
         }
    
-        res.status(201).json({member: savedMember});
+        res.status(201).json({
+            message: "Membre créé avec succès",
+            member: savedMember
+        });
     } catch (error) {
         console.log("❌ Erreur lors de la création du membre:", error.message);
         res.status(400).json({ message: error.message });

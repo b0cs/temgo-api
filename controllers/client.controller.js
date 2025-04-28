@@ -1,5 +1,5 @@
 import Member from '../models/member.model.js';
-import ClientClusterRelation from '../models/ClientClusterRelation.js';
+import ClientClusterRelation from '../models/clientClusterRelation.model.js';
 import mongoose from 'mongoose';
 
 // Récupérer tous les clients d'un établissement
@@ -48,7 +48,7 @@ export const getClientClusterRelation = async (req, res) => {
   }
 };
 
-// Rechercher des clients globaux
+// Rechercher des clients globaux avec une sécurité renforcée
 export const searchGlobalClients = async (req, res) => {
   try {
     const { query, clusterId } = req.query;
@@ -72,8 +72,9 @@ export const searchGlobalClients = async (req, res) => {
         { email: searchRegex },
         { phone: searchRegex }
       ],
-      role: 'client'
-    });
+      role: 'client',
+      status: { $ne: 'deleted' }
+    }).lean();
     
     // Récupérer les IDs des clients déjà associés à cet établissement
     const existingRelations = await ClientClusterRelation.find({ 
@@ -85,13 +86,43 @@ export const searchGlobalClients = async (req, res) => {
       relation.clientId.toString()
     );
     
-    // Ajouter une propriété pour indiquer si le client est déjà dans cet établissement
-    const enrichedClients = clients.map(client => ({
-      ...client.toObject(),
-      alreadyInCluster: existingClientIds.includes(client._id.toString())
-    }));
+    // Filtrer et transformer les données pour la sécurité
+    const secureClients = clients.map(client => {
+      const isInCluster = existingClientIds.includes(client._id.toString());
+      
+      // Déterminer combien d'informations partager selon que le client est déjà dans l'établissement ou non
+      if (isInCluster) {
+        // Client déjà dans l'établissement - montrer toutes les informations
+        return {
+          _id: client._id,
+          firstName: client.firstName,
+          lastName: client.lastName,
+          email: client.email,
+          phone: client.phone,
+          alreadyInCluster: true
+        };
+      } else {
+        // Client d'un autre établissement - informations limitées et masquées partiellement
+        // Anonymiser partiellement l'email et le téléphone
+        const maskedEmail = client.email ? 
+          client.email.replace(/^(.{2})(.*)(@.*)$/, '$1*****$3') : '';
+        
+        const maskedPhone = client.phone ? 
+          client.phone.replace(/^(.{2})(.*)(.{2})$/, '$1*****$3') : '';
+        
+        return {
+          _id: client._id,
+          firstName: client.firstName,
+          lastName: client.lastName, 
+          email: maskedEmail,
+          phone: maskedPhone,
+          alreadyInCluster: false,
+          needsConfirmation: true // Indiquer qu'une confirmation est nécessaire
+        };
+      }
+    });
 
-    return res.status(200).json(enrichedClients);
+    return res.status(200).json(secureClients);
   } catch (error) {
     console.error('Erreur lors de la recherche des clients:', error);
     return res.status(500).json({ message: 'Erreur serveur' });
@@ -102,7 +133,7 @@ export const searchGlobalClients = async (req, res) => {
 export const addExistingClientToCluster = async (req, res) => {
   try {
     const { clientId } = req.params;
-    const { clusterId } = req.body;
+    const { clusterId, confirmed } = req.body;
     
     if (!mongoose.Types.ObjectId.isValid(clientId) || !mongoose.Types.ObjectId.isValid(clusterId)) {
       return res.status(400).json({ message: 'IDs invalides' });
@@ -115,15 +146,44 @@ export const addExistingClientToCluster = async (req, res) => {
     }
 
     // Vérifier si la relation existe déjà
-    const existingRelation = await ClientClusterRelation.findOne({ clientId, clusterId });
+    const existingRelation = await ClientClusterRelation.findOne({ 
+      clientId, 
+      clusterId 
+    });
+    
     if (existingRelation) {
       // Si la relation existe mais n'est pas active, la réactiver
       if (!existingRelation.isActive) {
         existingRelation.isActive = true;
         await existingRelation.save();
-        return res.status(200).json(existingRelation);
+        return res.status(200).json({
+          message: 'Client réactivé dans cet établissement',
+          relation: existingRelation
+        });
       }
       return res.status(409).json({ message: 'Ce client est déjà associé à cet établissement' });
+    }
+
+    // Vérifier si le client appartient à d'autres établissements
+    const otherRelations = await ClientClusterRelation.countDocuments({
+      clientId,
+      clusterId: { $ne: clusterId }
+    });
+
+    // Si le client existe dans d'autres établissements et que la confirmation n'a pas été fournie
+    if (otherRelations > 0 && !confirmed) {
+      // Retourner les informations sur le client pour demander une confirmation
+      return res.status(428).json({
+        message: 'Confirmation requise: ce client existe dans d\'autres établissements',
+        client: {
+          _id: clientExists._id,
+          firstName: clientExists.firstName,
+          lastName: clientExists.lastName,
+          email: clientExists.email,
+          phone: clientExists.phone
+        },
+        requiresConfirmation: true
+      });
     }
 
     // Créer une nouvelle relation
@@ -140,7 +200,10 @@ export const addExistingClientToCluster = async (req, res) => {
 
     await newRelation.save();
     
-    return res.status(201).json(newRelation);
+    return res.status(201).json({
+      message: 'Client ajouté à l\'établissement',
+      relation: newRelation
+    });
   } catch (error) {
     console.error('Erreur lors de l\'ajout du client à l\'établissement:', error);
     return res.status(500).json({ message: 'Erreur serveur' });

@@ -1,21 +1,21 @@
-import express from 'express';
-import serviceRouter from './service.router.js';
-import clusterRouter from './cluster.router.js';
-import memberRouter from './member.router.js';
-import appointmentRouter from './appointment.router.js';
-import tableLayoutRouter from './tableLayout.router.js';
-import tableRouter from './table.router.js';
-import authRouter from './auth.router.js';
-import reviewRouter from './review.router.js';
-import imageRouter from '../routes/image.routes.js';
-import uploadRouter from '../routes/upload.routes.js';
-import dashboardRouter from './dashboard.router.js';
-import exportRouter from './export.router.js';
-import restaurantRouter from '../routes/restaurant.routes.js';
-import nightclubRouter from './nightclub.router.js';
-import clientRelationsRouter from './client-relations.router.js';
-import clientsRouter from './clients.router.js';
-import clientRouter from './client.router.js';
+const express = require('express');
+const serviceRouter = require('./service.router');
+const clusterRouter = require('./cluster.router');
+const memberRouter = require('./member.router');
+const appointmentRouter = require('./appointment.router');
+const tableLayoutRouter = require('./tableLayout.router');
+const tableRouter = require('./table.router');
+const authRouter = require('./auth.router');
+const reviewRouter = require('./review.router');
+const imageRouter = require('../routes/image.routes');
+const uploadRouter = require('../routes/upload.routes');
+const dashboardRouter = require('./dashboard.router');
+const exportRouter = require('./export.router');
+const restaurantRouter = require('../routes/restaurant.routes');
+const nightclubRouter = require('./nightclub.router');
+const clientRelationsRouter = require('./client-relations.router');
+const clientsRouter = require('./clients.router');
+const clientRouter = require('./client.router');
 
 const router = express.Router();
 
@@ -70,5 +70,5 @@ router.use('/clients', clientsRouter);
 // Routes pour la gestion des clients dans les établissements
 router.use('/client', clientRouter);
 
-export default router;
+module.exports = router;
 
