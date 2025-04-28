@@ -867,3 +867,61 @@ export const updateAppointmentGenderStats = async (req, res) => {
     });
   }
 };
+
+// Endpoint pour récupérer les rendez-vous en masse pour plusieurs clients
+export const getAppointmentsBulk = async (req, res) => {
+  try {
+    const { clientIds, clusterId } = req.query;
+    
+    if (!clientIds || !clusterId) {
+      return res.status(400).json({ message: 'Les IDs clients et l\'ID du cluster sont requis' });
+    }
+    
+    // Validation de l'ID du cluster
+    if (!mongoose.Types.ObjectId.isValid(clusterId)) {
+      return res.status(400).json({ message: 'ID de cluster invalide' });
+    }
+    
+    // Convertir la liste des IDs clients en array
+    const clientIdsArray = clientIds.split(',');
+    
+    // Vérifier que les IDs clients sont valides
+    const invalidIds = clientIdsArray.filter(id => !mongoose.Types.ObjectId.isValid(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({ 
+        message: 'Certains IDs clients sont invalides',
+        invalidIds 
+      });
+    }
+    
+    // Créer un objet pour stocker les résultats
+    const result = {};
+    
+    // Récupérer les rendez-vous pour tous les clients en une seule requête
+    const appointments = await Appointment.find({
+      member: { $in: clientIdsArray },
+      cluster: clusterId
+    })
+    .populate('service')
+    .populate('employee')
+    .sort({ startTime: -1 });
+    
+    console.log(`Récupération de ${appointments.length} rendez-vous pour ${clientIdsArray.length} clients`);
+    
+    // Organiser les rendez-vous par client
+    for (const appointment of appointments) {
+      const clientId = appointment.member.toString();
+      
+      if (!result[clientId]) {
+        result[clientId] = [];
+      }
+      
+      result[clientId].push(appointment);
+    }
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Erreur lors de la récupération des rendez-vous en masse:', error);
+    return res.status(500).json({ message: 'Erreur serveur lors de la récupération des rendez-vous' });
+  }
+};

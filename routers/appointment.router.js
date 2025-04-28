@@ -1,5 +1,5 @@
 import express from "express";
-import { bookAppointment, getAppointmentsByCluster, getAppointmentsByMember, getAllAppointmentsByDay, cancelAppointment, getAllAppointments, assignEmployeeToAppointment, getStaffByCluster, updateAppointmentAttendance, updateAppointment, updateAppointmentGenderStats } from "../controllers/appointment.controller.js";
+import { bookAppointment, getAppointmentsByCluster, getAppointmentsByMember, getAllAppointmentsByDay, cancelAppointment, getAllAppointments, assignEmployeeToAppointment, getStaffByCluster, updateAppointmentAttendance, updateAppointment, updateAppointmentGenderStats, getAppointmentsBulk } from "../controllers/appointment.controller.js";
 import { updateAppointmentStatus } from "../controllers/user.controller.js";
 import { authMiddleware, checkPermissions } from "../middleware/auth.middleware.js";
 import { createAppointment } from '../controllers/member.controller.js';
@@ -13,6 +13,9 @@ const appointmentRouter = express.Router();
 // Routes publiques pour le développement (pas d'authentification requise)
 // Obtenir tous les staffs d'un cluster (chemin modifié pour éviter les conflits)
 appointmentRouter.get("/cluster/staff/:clusterId", getStaffByCluster);
+
+// Récupération en masse des rendez-vous pour plusieurs clients
+appointmentRouter.get("/bulk", getAppointmentsBulk);
 
 // Obtenir les rendez-vous d'un membre (accessible sans authentification pour le développement)
 // IMPORTANT: cette route doit être déclarée AVANT les routes avec /:clusterId pour éviter les conflits
