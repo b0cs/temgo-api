@@ -1,9 +1,11 @@
 import User from '../models/user.model.js';
 import Cluster from '../models/cluster.model.js';
+import Member from '../models/member.model.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 
 dotenv.config();
 
@@ -151,6 +153,18 @@ export const login = async (req, res) => {
     // Vérifier que l'email et le mot de passe sont fournis
     if (!email || !password) {
       return res.status(400).json({ message: 'Email et mot de passe requis' });
+    }
+    
+    // Vérifier d'abord si l'email correspond à un membre (client) dans la collection Member
+    const Member = mongoose.model('Member');
+    const isMember = await Member.findOne({ email });
+    
+    if (isMember) {
+      // Si c'est un membre (client), refuser l'accès à l'application Business
+      return res.status(403).json({
+        message: 'Cette application est réservée aux professionnels. Veuillez utiliser l\'application Temgo Client.',
+        isClient: true
+      });
     }
 
     // Trouver l'utilisateur par email
