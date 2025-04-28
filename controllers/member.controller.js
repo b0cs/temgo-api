@@ -1,4 +1,5 @@
 import Member from "../models/member.model.js";
+import ClientClusterRelation from "../models/ClientClusterRelation.js";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import Cluster from "../models/cluster.model.js";
@@ -12,7 +13,7 @@ import User from "../models/user.model.js";
 
 dotenv.config();
 export const createMember = async (req, res) => {
-    const { firstName, lastName, email, phone, passwordHash, role, cluster } = req.body;
+    const { firstName, lastName, email, phone, passwordHash, role, cluster, preferences } = req.body;
     
     console.log("🔍 Tentative de création d'un membre avec les données:", {
         firstName, lastName, email, phone, cluster
@@ -40,6 +41,39 @@ export const createMember = async (req, res) => {
             const existingMember = await Member.findOne({ email });
             if (existingMember) {
                 console.log(`❌ Un membre avec l'email ${email} existe déjà`);
+                
+                // Si le membre existe mais n'est pas encore associé à ce cluster, créer la relation
+                if (existingMember.role === 'client') {
+                    // Vérifier si une relation existe déjà
+                    const existingRelation = await ClientClusterRelation.findOne({
+                        client: existingMember._id,
+                        cluster
+                    });
+                    
+                    if (existingRelation) {
+                        return res.status(400).json({ 
+                            message: `Ce client est déjà associé à cet établissement`,
+                            memberId: existingMember._id
+                        });
+                    }
+                    
+                    // Créer une nouvelle relation
+                    const newRelation = new ClientClusterRelation({
+                        client: existingMember._id,
+                        cluster,
+                        preferences: preferences || '',
+                        joinedAt: new Date()
+                    });
+                    
+                    await newRelation.save();
+                    
+                    return res.status(201).json({
+                        message: "Client existant ajouté à l'établissement",
+                        member: existingMember,
+                        relation: newRelation
+                    });
+                }
+                
                 return res.status(400).json({ message: `Un membre avec l'email ${email} existe déjà` });
             }
         }
@@ -49,6 +83,39 @@ export const createMember = async (req, res) => {
             const existingMemberByPhone = await Member.findOne({ phone });
             if (existingMemberByPhone) {
                 console.log(`❌ Un membre avec le numéro de téléphone ${phone} existe déjà`);
+                
+                // Si le membre existe mais n'est pas encore associé à ce cluster, créer la relation
+                if (existingMemberByPhone.role === 'client') {
+                    // Vérifier si une relation existe déjà
+                    const existingRelation = await ClientClusterRelation.findOne({
+                        client: existingMemberByPhone._id,
+                        cluster
+                    });
+                    
+                    if (existingRelation) {
+                        return res.status(400).json({ 
+                            message: `Ce client est déjà associé à cet établissement`,
+                            memberId: existingMemberByPhone._id
+                        });
+                    }
+                    
+                    // Créer une nouvelle relation
+                    const newRelation = new ClientClusterRelation({
+                        client: existingMemberByPhone._id,
+                        cluster,
+                        preferences: preferences || '',
+                        joinedAt: new Date()
+                    });
+                    
+                    await newRelation.save();
+                    
+                    return res.status(201).json({
+                        message: "Client existant ajouté à l'établissement",
+                        member: existingMemberByPhone,
+                        relation: newRelation
+                    });
+                }
+                
                 return res.status(400).json({ message: `Un membre avec le numéro de téléphone ${phone} existe déjà` });
             }
         }
@@ -63,14 +130,34 @@ export const createMember = async (req, res) => {
             phone,
             passwordHash: defaultPasswordHash,
             role: role || 'client',
+            // Cluster est maintenant facultatif, car le client peut appartenir à plusieurs clusters
+            // Le conserver pour la rétrocompatibilité
             cluster
         });
 
         console.log("✅ Tentative de sauvegarde du nouveau membre");
         const savedMember = await newMember.save();
         console.log("✅ Membre créé avec succès:", savedMember._id);
+        
+        // Si c'est un client, créer également une relation avec le cluster
+        if (savedMember.role === 'client') {
+            const newRelation = new ClientClusterRelation({
+                client: savedMember._id,
+                cluster,
+                preferences: preferences || '',
+                joinedAt: new Date()
+            });
+            
+            await newRelation.save();
+            console.log("✅ Relation client-cluster créée avec succès");
+            
+            return res.status(201).json({
+                member: savedMember,
+                relation: newRelation
+            });
+        }
    
-        res.status(201).json({savedMember});
+        res.status(201).json({member: savedMember});
     } catch (error) {
         console.log("❌ Erreur lors de la création du membre:", error.message);
         res.status(400).json({ message: error.message });
@@ -84,13 +171,62 @@ export const getMembersByCluster = async (req, res) => {
     console.log("🔍 Recherche de membres pour le cluster:", clusterId, "avec le statut:", status);
     
     try {
+        // Vérifier d'abord si on doit utiliser les relations many-to-many
+        const relationsExist = await ClientClusterRelation.exists({ clusterId: clusterId });
+        
+        if (relationsExist) {
+            console.log("🔄 Utilisation des relations client-cluster (many-to-many)");
+            
+            // Chercher les relations pour ce cluster
+            const relations = await ClientClusterRelation.find({ clusterId: clusterId })
+                .populate({
+                    path: 'clientId',
+                    select: 'firstName lastName email phone status',
+                    match: { status: { $ne: 'deleted' } } // Exclure les clients supprimés
+                })
+                .sort({ updatedAt: -1 });
+            
+            // Filtrer les relations dont le client a été supprimé ou est null
+            const validRelations = relations.filter(relation => relation.clientId !== null);
+            
+            // Transformer la réponse pour inclure les informations du client directement
+            const formattedRelations = validRelations.map(relation => {
+                const client = relation.clientId;
+                return {
+                    _id: relation._id,
+                    clientId: relation.clientId._id,
+                    firstName: client.firstName,
+                    lastName: client.lastName,
+                    email: client.email,
+                    phone: client.phone,
+                    status: client.status,
+                    relationId: relation._id,
+                    joinedAt: relation.joinedAt,
+                    lastVisit: relation.lastVisit,
+                    totalSpent: relation.totalSpent,
+                    visitsCount: relation.visitsCount,
+                    preferences: relation.preferences || client.notes
+                };
+            });
+            
+            console.log(`✅ ${formattedRelations.length} clients trouvés via les relations`);
+            return res.status(200).json(formattedRelations);
+        }
+        
+        // Si aucune relation n'existe encore, utiliser l'ancien système
+        console.log("⚠️ Aucune relation client-cluster trouvée, utilisation de l'ancien système");
+        
         const query = { cluster: clusterId };
         if (status) {
             query.status = status;
+        } else {
+            // Par défaut, ne pas inclure les clients supprimés
+            query.status = { $ne: 'deleted' };
         }
         
         const members = await Member.find(query);
-        console.log(`✅ ${members.length} membres trouvés`);
+        console.log(`✅ ${members.length} membres trouvés (ancien système)`);
+        
         res.status(200).json(members);
     } catch (error) {
         console.error("❌ Erreur lors de la recherche des membres:", error);
@@ -233,6 +369,48 @@ export const getAllMembersByCluster = async (req, res) => {
     console.log("🔍 Recherche de tous les membres pour le cluster:", clusterId, "avec le statut:", status);
     
     try {
+        // Vérifier d'abord si on doit utiliser les relations many-to-many
+        const relationsExist = await ClientClusterRelation.exists({ clusterId: clusterId });
+        
+        if (relationsExist) {
+            console.log("🔄 Utilisation des relations client-cluster (many-to-many)");
+            
+            // Chercher les relations pour ce cluster
+            const relations = await ClientClusterRelation.find({ clusterId: clusterId })
+                .populate({
+                    path: 'clientId',
+                    select: 'firstName lastName email phone status',
+                    match: { status: { $ne: 'deleted' } } // Exclure les clients supprimés
+                })
+                .sort({ updatedAt: -1 });
+            
+            // Filtrer les relations dont le client a été supprimé ou est null
+            const validRelations = relations.filter(relation => relation.clientId !== null);
+            
+            // Transformer la réponse pour inclure les informations du client directement
+            const formattedRelations = validRelations.map(relation => {
+                const client = relation.clientId;
+                return {
+                    _id: relation._id,
+                    clientId: relation.clientId._id,
+                    firstName: client.firstName,
+                    lastName: client.lastName,
+                    email: client.email,
+                    phone: client.phone,
+                    status: client.status,
+                    relationId: relation._id,
+                    joinedAt: relation.joinedAt,
+                    lastVisit: relation.lastVisit,
+                    totalSpent: relation.totalSpent,
+                    visitsCount: relation.visitsCount,
+                    preferences: relation.preferences || client.notes
+                };
+            });
+            
+            console.log(`✅ ${formattedRelations.length} clients trouvés via les relations`);
+            return res.status(200).json(formattedRelations);
+        }
+        
         const query = { cluster: clusterId };
         if (status) {
             query.status = status;
@@ -298,6 +476,24 @@ export const createAppointment = async (req, res) => {
     const cluster = await Cluster.findById(clusterId);
     if (!cluster) {
       return res.status(404).json({ message: 'Cluster non trouvé' });
+    }
+    
+    // Vérifier si le client a une relation avec ce cluster
+    const hasRelation = await ClientClusterRelation.findOne({ 
+      client: memberId, 
+      cluster: clusterId 
+    });
+    
+    // Si le membre est un client et qu'il n'a pas de relation avec ce cluster, créer une relation
+    if (member.role === 'client' && !hasRelation) {
+      const newRelation = new ClientClusterRelation({
+        client: memberId,
+        cluster: clusterId,
+        joinedAt: new Date()
+      });
+      
+      await newRelation.save();
+      console.log(`✅ Relation client-cluster créée automatiquement lors de la prise de rendez-vous`);
     }
 
     // Vérifier les conflits si un employé est spécifié

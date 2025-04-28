@@ -24,7 +24,7 @@ const memberSchema = new Schema({
   phone: { type: String, unique: true }, // Téléphone, doit être unique
   passwordHash: { type: String, required: true }, // Mot de passe hashé pour la sécurité
   role: { type: String, required: true }, // Rôle du membre dans l'entreprise
-  cluster: { type: Schema.Types.ObjectId, ref: 'Cluster', required: true }, // Référence au cluster associé
+  cluster: { type: Schema.Types.ObjectId, ref: 'Cluster' }, // Référence au cluster principal (facultatif)
   isActive: { type: Boolean, default: true }, // Indique si le compte du membre est actif
   schedule: { // Horaire hebdomadaire détaillé par jour
     monday: dayScheduleSchema,

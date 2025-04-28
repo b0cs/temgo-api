@@ -1,6 +1,14 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.middleware.js';
-import { login, createEmployee, getMe, createAdmin, refreshToken } from '../controllers/auth.controller.js';
+import { 
+  login, 
+  clientLogin,
+  createEmployee, 
+  getMe, 
+  getClientProfile,
+  createAdmin, 
+  refreshToken 
+} from '../controllers/auth.controller.js';
 import { 
     getStaffsByCluster, 
     getStaffDetails, 
@@ -14,6 +22,8 @@ const authRouter = express.Router();
 
 // Routes publiques
 authRouter.post('/login', login);
+// Route pour connecter un client (application mobile)
+authRouter.post('/client/login', clientLogin);
 // Route pour créer un admin sans authentification (pour les tests/initialisation)
 authRouter.post('/admin', createAdmin);
 // Route pour rafraîchir le token d'accès
@@ -27,6 +37,8 @@ authRouter.use(authMiddleware);
 
 // Route pour récupérer les informations de l'utilisateur connecté
 authRouter.get('/me', getMe);
+// Route pour récupérer le profil complet d'un client avec ses relations
+authRouter.get('/client/profile', getClientProfile);
 
 // Création d'un employé
 authRouter.post('/employee', createEmployee);

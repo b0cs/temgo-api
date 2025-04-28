@@ -13,6 +13,9 @@ import dashboardRouter from './dashboard.router.js';
 import exportRouter from './export.router.js';
 import restaurantRouter from '../routes/restaurant.routes.js';
 import nightclubRouter from './nightclub.router.js';
+import clientRelationsRouter from './client-relations.router.js';
+import clientsRouter from './clients.router.js';
+import clientRouter from './client.router.js';
 
 const router = express.Router();
 
@@ -57,6 +60,15 @@ router.use('/restaurant', restaurantRouter);
 
 // Routes pour les boîtes de nuit
 router.use('/nightclub', nightclubRouter);
+
+// Routes pour les relations client-cluster
+router.use('/client-relations', clientRelationsRouter);
+
+// Routes pour la recherche globale de clients
+router.use('/clients', clientsRouter);
+
+// Routes pour la gestion des clients dans les établissements
+router.use('/client', clientRouter);
 
 export default router;
 

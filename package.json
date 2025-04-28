@@ -13,7 +13,8 @@
     "fix-appointments": "node scripts/fix-appointments.js",
     "inspect-data": "node scripts/inspect-data.js",
     "recreate-appointments": "node scripts/recreate-appointments.js",
-    "test-api": "node scripts/test-api.js"
+    "test-api": "node scripts/test-api.js",
+    "migrate:client-relations": "node scripts/migrateClientRelations.js"
   },
   "keywords": [],
   "author": "",

@@ -1,6 +1,7 @@
 import User from '../models/user.model.js';
 import Cluster from '../models/cluster.model.js';
 import Member from '../models/member.model.js';
+import ClientClusterRelation from '../models/ClientClusterRelation.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
@@ -207,6 +208,80 @@ export const login = async (req, res) => {
         role: user.role,
         permissions: user.permissions,
         cluster: user.cluster
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la connexion: ' + error.message });
+  }
+};
+
+/**
+ * Connexion client (pour application mobile client)
+ */
+export const clientLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Vérifier que l'email et le mot de passe sont fournis
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email et mot de passe requis' });
+    }
+
+    // Chercher le membre par email
+    const member = await Member.findOne({ email });
+    if (!member) {
+      return res.status(401).json({ message: 'Identifiants incorrects' });
+    }
+
+    // Vérifier si le membre est actif et n'est pas banni ou supprimé
+    if (member.status !== 'active') {
+      return res.status(403).json({ 
+        message: 'Compte ' + (member.status === 'banned' ? 'banni' : 'désactivé'),
+        status: member.status
+      });
+    }
+
+    // Vérifier le mot de passe
+    const isMatch = await bcrypt.compare(password, member.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Identifiants incorrects' });
+    }
+
+    // Récupérer les clusters auxquels le client est associé via les relations
+    const relations = await ClientClusterRelation.find({ clientId: member._id })
+      .populate('clusterId', 'name location type');
+    
+    const clusters = relations.map(relation => relation.cluster);
+
+    // Générer le token JWT
+    const token = generateToken(member._id);
+    
+    // Générer un refresh token
+    const refreshToken = generateRefreshToken(member._id);
+
+    res.status(200).json({
+      message: 'Connexion réussie',
+      token,
+      accessToken: token,
+      refreshToken,
+      user: {
+        id: member._id,
+        email: member.email,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        role: member.role,
+        clusters: clusters,
+        relations: relations.map(relation => ({
+          id: relation._id,
+          clusterId: relation.clusterId,
+          clusterName: relation.clusterId.name,
+          clusterType: relation.clusterId.type,
+          clusterLocation: relation.clusterId.location,
+          joinedAt: relation.joinedAt,
+          lastVisit: relation.lastVisit,
+          totalSpent: relation.totalSpent,
+          visitsCount: relation.visitsCount
+        }))
       }
     });
   } catch (error) {
@@ -473,6 +548,56 @@ export const getMe = async (req, res) => {
     res.status(200).json(user);
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la récupération des informations: ' + error.message });
+  }
+};
+
+/**
+ * Obtenir les informations complètes du client connecté, y compris ses relations avec les établissements
+ */
+export const getClientProfile = async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    
+    // Récupérer le profil du client
+    const client = await Member.findById(clientId)
+      .select('-passwordHash');
+    
+    if (!client) {
+      return res.status(404).json({ message: 'Client non trouvé' });
+    }
+    
+    // Récupérer les relations du client avec les établissements
+    const relations = await ClientClusterRelation.find({ clientId: clientId })
+      .populate('clusterId', 'name location type');
+    
+    // Formatter la réponse
+    const formattedRelations = relations.map(relation => ({
+      id: relation._id,
+      clusterId: relation.clusterId._id,
+      clusterName: relation.clusterId.name,
+      clusterType: relation.clusterId.type,
+      clusterLocation: relation.clusterId.location,
+      joinedAt: relation.joinedAt,
+      lastVisit: relation.lastVisit,
+      totalSpent: relation.totalSpent,
+      visitsCount: relation.visitsCount,
+      preferences: relation.preferences
+    }));
+    
+    res.status(200).json({
+      client: {
+        id: client._id,
+        firstName: client.firstName,
+        lastName: client.lastName,
+        email: client.email,
+        phone: client.phone,
+        status: client.status,
+        gender: client.gender
+      },
+      clusters: formattedRelations
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la récupération du profil client: ' + error.message });
   }
 };
 
