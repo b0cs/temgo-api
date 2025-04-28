@@ -1,6 +1,8 @@
 import User from '../models/user.model.js';
 import Appointment from '../models/appointment.model.js';
 import mongoose from 'mongoose';
+import Member from '../models/member.model.js';
+import ClientClusterRelation from '../models/ClientClusterRelation.js';
 
 /**
  * Récupère tous les staffs (employés et managers) d'un cluster
@@ -525,4 +527,100 @@ export const bookAppointment = async (req, res) => {
         console.error('Erreur dans bookAppointment:', error);
         res.status(500).json({ message: 'Erreur lors de la création du rendez-vous', error: error.message });
     }
+}; 
+
+/**
+ * Mettre à jour le statut d'un client (actif, banni, supprimé) pour un cluster spécifique
+ * Cette fonction prend en compte la relation many-to-many entre clients et clusters
+ */
+export const updateClientStatusInCluster = async (req, res) => {
+  try {
+    const { clientId, clusterId } = req.params;
+    const { status } = req.body;
+    
+    // Vérifier les paramètres
+    if (!clientId || !clusterId) {
+      return res.status(400).json({ message: 'ID client et ID cluster requis' });
+    }
+    
+    if (!status || !['active', 'banned', 'deleted'].includes(status)) {
+      return res.status(400).json({ message: 'Statut invalide. Valeurs acceptées: active, banned, deleted' });
+    }
+    
+    // Vérifier que les IDs sont valides
+    if (!mongoose.Types.ObjectId.isValid(clientId) || !mongoose.Types.ObjectId.isValid(clusterId)) {
+      return res.status(400).json({ message: 'IDs invalides' });
+    }
+    
+    // Vérifier que le client existe
+    const client = await Member.findById(clientId);
+    if (!client) {
+      return res.status(404).json({ message: 'Client non trouvé' });
+    }
+    
+    // Vérifier que la relation existe
+    const relation = await ClientClusterRelation.findOne({ clientId, clusterId });
+    if (!relation) {
+      return res.status(404).json({ message: 'Relation client-établissement non trouvée' });
+    }
+    
+    // Si on veut supprimer ou bannir, vérifier qu'il n'y a pas de rendez-vous à venir
+    if (status === 'deleted' || status === 'banned') {
+      const futureAppointments = await Appointment.find({
+        member: clientId,
+        cluster: clusterId,
+        startTime: { $gt: new Date() },
+        status: { $nin: ['cancelled', 'no_show'] }
+      });
+      
+      if (futureAppointments.length > 0) {
+        return res.status(400).json({
+          message: `Impossible de ${status === 'deleted' ? 'supprimer' : 'bannir'} ce client car il a des rendez-vous à venir`,
+          appointments: futureAppointments.map(app => ({
+            id: app._id,
+            date: app.startTime,
+            service: app.service?.name || 'Service non spécifié'
+          }))
+        });
+      }
+    }
+    
+    // Mettre à jour la relation selon le statut
+    if (status === 'deleted') {
+      // Désactiver la relation
+      relation.isActive = false;
+      await relation.save();
+    } else if (status === 'banned') {
+      // Désactiver la relation et marquer dans les préférences
+      relation.isActive = false;
+      if (!relation.preferences) relation.preferences = {};
+      relation.preferences.banned = true;
+      await relation.save();
+    } else {
+      // Réactiver la relation
+      relation.isActive = true;
+      if (relation.preferences && relation.preferences.banned) {
+        relation.preferences.banned = false;
+      }
+      await relation.save();
+    }
+    
+    return res.status(200).json({ 
+      message: `Statut du client mis à jour avec succès: ${status}`,
+      client: {
+        id: client._id,
+        firstName: client.firstName,
+        lastName: client.lastName,
+        status: status
+      },
+      relation: {
+        id: relation._id,
+        isActive: relation.isActive,
+        clusterId: relation.clusterId
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du statut du client:', error);
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
 }; 
