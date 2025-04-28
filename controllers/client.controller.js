@@ -11,11 +11,57 @@ export const getClientsByCluster = async (req, res) => {
       return res.status(400).json({ message: 'ID d\'établissement invalide' });
     }
 
-    // Trouver toutes les relations pour cet établissement
-    const relations = await ClientClusterRelation.find({ 
-      clusterId, 
-      isActive: true 
-    }).populate('clientId', 'firstName lastName email phone');
+    console.time('getClientsByCluster');
+
+    // Utiliser l'agrégation pour récupérer toutes les données en une seule requête
+    const relations = await ClientClusterRelation.aggregate([
+      // Étape 1: Filtrer pour ne récupérer que les relations actives pour ce cluster
+      { 
+        $match: { 
+          clusterId: new mongoose.Types.ObjectId(clusterId),
+          isActive: true 
+        } 
+      },
+      // Étape 2: Joindre la collection des membres pour récupérer les données du client
+      {
+        $lookup: {
+          from: 'members',
+          localField: 'clientId',
+          foreignField: '_id',
+          as: 'clientInfo'
+        }
+      },
+      // Étape 3: Déstructurer le tableau clientInfo (un seul élément)
+      {
+        $unwind: {
+          path: '$clientInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      // Étape 4: Projeter seulement les champs nécessaires
+      {
+        $project: {
+          _id: 1,
+          clientId: 1,
+          clusterId: 1,
+          joinedAt: 1,
+          lastVisit: 1,
+          totalSpent: 1,
+          visitsCount: 1,
+          preferences: 1,
+          favoriteServices: 1,
+          'clientInfo._id': 1,
+          'clientInfo.firstName': 1,
+          'clientInfo.lastName': 1,
+          'clientInfo.email': 1,
+          'clientInfo.phone': 1,
+          'clientInfo.status': 1
+        }
+      }
+    ]);
+
+    console.timeEnd('getClientsByCluster');
+    console.log(`Récupéré ${relations.length} clients en une seule requête`);
 
     return res.status(200).json(relations);
   } catch (error) {
