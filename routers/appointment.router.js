@@ -17,6 +17,9 @@ appointmentRouter.get("/cluster/staff/:clusterId", getStaffByCluster);
 // Récupération en masse des rendez-vous pour plusieurs clients
 appointmentRouter.get("/bulk", getAppointmentsBulk);
 
+// Route alternative pour la compatibilité
+appointmentRouter.get("/s/bulk", getAppointmentsBulk);
+
 // Obtenir les rendez-vous d'un membre (accessible sans authentification pour le développement)
 // IMPORTANT: cette route doit être déclarée AVANT les routes avec /:clusterId pour éviter les conflits
 appointmentRouter.get("/member/:memberId", getAppointmentsByMember);
