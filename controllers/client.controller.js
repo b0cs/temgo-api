@@ -1,5 +1,5 @@
 import Member from '../models/member.model.js';
-import ClientClusterRelation from '../models/clientClusterRelation.model.js';
+import ClientClusterRelation from '../models/ClientClusterRelation.js';
 import mongoose from 'mongoose';
 
 // Récupérer tous les clients d'un établissement
