@@ -272,14 +272,17 @@ const clusterSchema = new Schema({
     coverUrl: { type: String }, // Image de couverture pour l'en-tête
   },
   
-  // Champs spécifiques aux restaurants
+  // Champs spécifiques aux restaurants - définition du schéma mais sans valeur par défaut
   restaurantFeatures: { 
     type: restaurantFeaturesSchema,
-    default: () => ({})
+    required: function() { return this.type === 'Restaurant' || this.type === 'Bar'; }
   },
   
   // Données pour les salons de beauté et coiffure
-  services: [serviceSchema], // Référence aux services offerts
+  services: {
+    type: [serviceSchema],
+    default: function() { return this.type === 'HairSalon' || this.type === 'BeautySalon' ? [] : undefined; }
+  },
   
   // Général
   reviews: [{ type: Schema.Types.ObjectId, ref: 'Review' }], // Référence aux avis laissés par les clients
@@ -288,16 +291,19 @@ const clusterSchema = new Schema({
   
   // Si le type est une boîte de nuit, informations supplémentaires
   nightclubInfo: {
-    totalCapacity: { type: Number, default: 0 }, // Capacité totale de la boîte
-    currentOccupancy: { type: Number, default: 0 }, // Nombre actuel de personnes dans la boîte
-    doorPolicy: { type: String }, // Politique d'entrée (description des critères)
-    standardEntryFee: { type: Number, default: 0 }, // Prix d'entrée standard
-    vipEntryFee: { type: Number, default: 0 }, // Prix d'entrée VIP
-    occupancyHistory: [{ 
-      date: { type: Date }, 
-      maxOccupancy: { type: Number },
-      notes: { type: String }
-    }] // Historique de fréquentation pour analyse
+    type: {
+      totalCapacity: { type: Number, default: 0 }, // Capacité totale de la boîte
+      currentOccupancy: { type: Number, default: 0 }, // Nombre actuel de personnes dans la boîte
+      doorPolicy: { type: String }, // Politique d'entrée (description des critères)
+      standardEntryFee: { type: Number, default: 0 }, // Prix d'entrée standard
+      vipEntryFee: { type: Number, default: 0 }, // Prix d'entrée VIP
+      occupancyHistory: [{ 
+        date: { type: Date }, 
+        maxOccupancy: { type: Number },
+        notes: { type: String }
+      }] // Historique de fréquentation pour analyse
+    },
+    required: function() { return this.type === 'Nightclub'; }
   },
 }, {
   timestamps: true // Ajoute les champs createdAt et updatedAt automatiquement
