@@ -242,7 +242,7 @@ export const getMembersByCluster = async (req, res) => {
                 .populate({
                     path: 'clientId',
                     select: 'firstName lastName email phone status',
-                    match: { status: { $ne: 'deleted' } } // Exclure les clients supprimés
+                    match: status ? { status } : { status: { $nin: ['deleted', 'banned'] } } // Exclure les clients supprimés ET bannis par défaut
                 })
                 .sort({ updatedAt: -1 });
             
@@ -280,8 +280,8 @@ export const getMembersByCluster = async (req, res) => {
         if (status) {
             query.status = status;
         } else {
-            // Par défaut, ne pas inclure les clients supprimés
-            query.status = { $ne: 'deleted' };
+            // Par défaut, ne pas inclure les clients supprimés ou bannis
+            query.status = { $nin: ['deleted', 'banned'] };
         }
         
         const members = await Member.find(query);
@@ -440,7 +440,7 @@ export const getAllMembersByCluster = async (req, res) => {
                 .populate({
                     path: 'clientId',
                     select: 'firstName lastName email phone status',
-                    match: { status: { $ne: 'deleted' } } // Exclure les clients supprimés
+                    match: status ? { status } : { status: { $nin: ['deleted', 'banned'] } } // Exclure les clients supprimés ET bannis par défaut
                 })
                 .sort({ updatedAt: -1 });
             
@@ -474,6 +474,9 @@ export const getAllMembersByCluster = async (req, res) => {
         const query = { cluster: clusterId };
         if (status) {
             query.status = status;
+        } else {
+            // Par défaut, ne pas inclure les clients supprimés ou bannis
+            query.status = { $nin: ['deleted', 'banned'] };
         }
         
         // Chercher dans la collection members
@@ -483,13 +486,13 @@ export const getAllMembersByCluster = async (req, res) => {
         const users = await mongoose.connection.db.collection('users').find({
             cluster: new mongoose.Types.ObjectId(clusterId),
             role: 'client',
-            ...(status && { status })
+            ...(status ? { status } : { status: { $nin: ['deleted', 'banned'] } })
         }).toArray();
         
         // Chercher dans la collection clients
         const clients = await mongoose.connection.db.collection('clients').find({
             cluster: new mongoose.Types.ObjectId(clusterId),
-            ...(status && { status })
+            ...(status ? { status } : { status: { $nin: ['deleted', 'banned'] } })
         }).toArray();
         
         // Fusionner les résultats
