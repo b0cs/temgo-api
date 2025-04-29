@@ -1,6 +1,7 @@
 import Member from '../models/member.model.js';
 import ClientClusterRelation from '../models/ClientClusterRelation.js';
 import mongoose from 'mongoose';
+import Appointment from '../models/appointment.model.js';
 
 // Récupérer tous les clients d'un établissement
 export const getClientsByCluster = async (req, res) => {
@@ -14,16 +15,22 @@ export const getClientsByCluster = async (req, res) => {
 
     console.time('getClientsByCluster');
 
-    // Critères de recherche
+    // Critères de recherche pour les relations
     const matchCriteria = { 
       clusterId: new mongoose.Types.ObjectId(clusterId),
       isActive: true 
     };
 
+    // Critères de filtrage pour les clients bannis
+    const clientFilter = {};
+
     // Ajouter un filtre pour les clients bannis uniquement si demandé
     if (includeBanned === 'true') {
-      // Si on veut uniquement les clients bannis
-      matchCriteria['preferences.banned'] = true;
+      // Si on veut uniquement les clients bannis, retirer les critères habituels
+      delete matchCriteria['isActive']; // Ne pas filtrer par isActive pour voir aussi les inactifs
+      
+      // Criteria 1: Relation marquée comme banned dans preferences
+      // Criteria 2: OU client marqué comme banned dans status
       console.log('Affichage uniquement des clients bannis pour le cluster:', clusterId);
     } else if (includeBanned === 'all') {
       // Si on veut tous les clients, y compris les bannis
@@ -31,11 +38,12 @@ export const getClientsByCluster = async (req, res) => {
     } else {
       // Par défaut, exclure les clients bannis
       matchCriteria['preferences.banned'] = { $ne: true };
+      clientFilter['status'] = { $ne: 'banned' };
     }
 
     // Utiliser l'agrégation pour récupérer toutes les données en une seule requête
     const relations = await ClientClusterRelation.aggregate([
-      // Étape 1: Filtrer selon les critères définis
+      // Étape 1: Filtrer selon les critères définis pour les relations
       { 
         $match: matchCriteria
       },
@@ -55,6 +63,21 @@ export const getClientsByCluster = async (req, res) => {
           preserveNullAndEmptyArrays: true
         }
       },
+      // Filtrer les clients selon leur statut si nécessaire
+      ...(Object.keys(clientFilter).length > 0 ? [{
+        $match: {
+          'clientInfo.status': clientFilter.status
+        }
+      }] : []),
+      // Si on veut uniquement les clients bannis, ajouter un filtre spécial
+      ...(includeBanned === 'true' ? [{
+        $match: {
+          $or: [
+            { 'preferences.banned': true },
+            { 'clientInfo.status': 'banned' }
+          ]
+        }
+      }] : []),
       // Étape 4: Projeter seulement les champs nécessaires
       {
         $project: {
@@ -345,6 +368,25 @@ export const banClient = async (req, res) => {
       return res.status(404).json({ message: 'Relation client-cluster non trouvée' });
     }
 
+    // Vérifier si le client a des rendez-vous à venir
+    const futureAppointments = await Appointment.find({
+      member: relation.clientId,
+      cluster: relation.clusterId,
+      startTime: { $gt: new Date() },
+      status: { $nin: ['cancelled', 'no_show'] }
+    });
+    
+    if (futureAppointments.length > 0) {
+      return res.status(400).json({
+        message: 'Impossible de bannir ce client car il a des rendez-vous à venir',
+        appointments: futureAppointments.map(app => ({
+          id: app._id,
+          date: app.startTime,
+          service: app.service?.name || 'Service non spécifié'
+        }))
+      });
+    }
+
     // Mettre à jour les préférences pour marquer le client comme banni
     relation.preferences = {
       ...relation.preferences,
@@ -352,9 +394,25 @@ export const banClient = async (req, res) => {
       banReason: reason || 'Aucune raison spécifiée',
       bannedAt: new Date()
     };
+    
+    // Désactiver la relation
+    relation.isActive = false;
 
     // Enregistrer les modifications
     await relation.save();
+
+    // Également mettre à jour le statut du client dans la collection members
+    try {
+      const member = await Member.findById(relation.clientId);
+      if (member) {
+        member.status = 'banned';
+        await member.save();
+        console.log(`Client ${member.firstName} ${member.lastName} banni et statut mis à jour à 'banned'`);
+      }
+    } catch (memberError) {
+      console.error('Erreur lors de la mise à jour du statut membre:', memberError);
+      // Ne pas bloquer l'opération principale si cette étape échoue
+    }
 
     return res.status(200).json({
       message: 'Client banni avec succès',
@@ -393,9 +451,25 @@ export const unbanClient = async (req, res) => {
       banReason: undefined,
       bannedAt: undefined
     };
+    
+    // Réactiver la relation
+    relation.isActive = true;
 
     // Enregistrer les modifications
     await relation.save();
+
+    // Également mettre à jour le statut du client dans la collection members si nécessaire
+    try {
+      const member = await Member.findById(relation.clientId);
+      if (member && member.status === 'banned') {
+        member.status = 'active';
+        await member.save();
+        console.log(`Client ${member.firstName} ${member.lastName} débanni et statut mis à jour à 'active'`);
+      }
+    } catch (memberError) {
+      console.error('Erreur lors de la mise à jour du statut membre:', memberError);
+      // Ne pas bloquer l'opération principale si cette étape échoue
+    }
 
     return res.status(200).json({
       message: 'Client débanni avec succès',
