@@ -27,8 +27,8 @@ export const addCluster = async (req, res) => {
             coordinates: [0, 0] // Coordonnées par défaut
         };
 
-        // Créer une nouvelle instance du modèle Cluster avec tous les champs
-        const newCluster = new Cluster({
+        // Création d'un objet de base pour le nouveau cluster
+        const clusterData = {
             name,
             description,
             type,
@@ -37,8 +37,25 @@ export const addCluster = async (req, res) => {
             contact,
             email,
             geolocation: geoLocation,
-            services
-        });
+        };
+
+        // Ajouter les services uniquement pour les salons de beauté
+        if (type === 'HairSalon' || type === 'BeautySalon') {
+            clusterData.services = services;
+        }
+
+        // Ajouter les caractéristiques de restaurant uniquement pour les restaurants et bars
+        if (type === 'Restaurant' || type === 'Bar') {
+            clusterData.restaurantFeatures = req.body.restaurantFeatures || {};
+        }
+
+        // Ajouter les informations de boîte de nuit uniquement pour les discothèques
+        if (type === 'Nightclub') {
+            clusterData.nightclubInfo = req.body.nightclubInfo || {};
+        }
+
+        // Créer une nouvelle instance du modèle Cluster avec les champs appropriés
+        const newCluster = new Cluster(clusterData);
 
         // Enregistrer le nouveau cluster dans la base de données
         const savedCluster = await newCluster.save();
