@@ -512,17 +512,35 @@ export const createAppointment = async (req, res) => {
       return res.status(400).json({ message: 'Tous les champs requis doivent être renseignés' });
     }
 
-    // Vérifier si le membre existe et s'il n'est pas banni
+    // Vérifier si le membre existe
     const member = await Member.findById(memberId);
     if (!member) {
       return res.status(404).json({ message: 'Membre non trouvé' });
     }
     
-    // Vérifier si le membre est banni
+    // Vérifier si le membre est banni globalement
     if (member.status === 'banned') {
+      console.log(`🚫 Tentative de rendez-vous pour membre banni globalement: ${memberId}`);
       return res.status(403).json({ 
         message: 'Ce membre est banni et ne peut pas prendre de rendez-vous',
         memberStatus: 'banned'
+      });
+    }
+
+    // Vérifier si le client est banni spécifiquement dans ce cluster
+    const clientClusterRelation = await mongoose.model('ClientClusterRelation').findOne({
+      clientId: memberId,
+      clusterId: clusterId
+    });
+    
+    if (clientClusterRelation && 
+        (!clientClusterRelation.isActive && 
+         clientClusterRelation.preferences && 
+         clientClusterRelation.preferences.banned)) {
+      console.log(`🚫 Tentative de rendez-vous pour membre banni dans ce cluster: ${memberId}`);
+      return res.status(403).json({ 
+        message: 'Ce membre est banni dans cet établissement et ne peut pas prendre de rendez-vous',
+        memberStatus: 'banned_in_cluster'
       });
     }
 
