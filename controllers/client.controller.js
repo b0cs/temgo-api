@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 export const getClientsByCluster = async (req, res) => {
   try {
     const { clusterId } = req.params;
+    const { includeBanned } = req.query; // Nouveau paramètre pour inclure les clients bannis
     
     if (!mongoose.Types.ObjectId.isValid(clusterId)) {
       return res.status(400).json({ message: 'ID d\'établissement invalide' });
@@ -13,14 +14,30 @@ export const getClientsByCluster = async (req, res) => {
 
     console.time('getClientsByCluster');
 
+    // Critères de recherche
+    const matchCriteria = { 
+      clusterId: new mongoose.Types.ObjectId(clusterId),
+      isActive: true 
+    };
+
+    // Ajouter un filtre pour les clients bannis uniquement si demandé
+    if (includeBanned === 'true') {
+      // Si on veut uniquement les clients bannis
+      matchCriteria['preferences.banned'] = true;
+      console.log('Affichage uniquement des clients bannis pour le cluster:', clusterId);
+    } else if (includeBanned === 'all') {
+      // Si on veut tous les clients, y compris les bannis
+      console.log('Affichage de tous les clients pour le cluster:', clusterId);
+    } else {
+      // Par défaut, exclure les clients bannis
+      matchCriteria['preferences.banned'] = { $ne: true };
+    }
+
     // Utiliser l'agrégation pour récupérer toutes les données en une seule requête
     const relations = await ClientClusterRelation.aggregate([
-      // Étape 1: Filtrer pour ne récupérer que les relations actives pour ce cluster
+      // Étape 1: Filtrer selon les critères définis
       { 
-        $match: { 
-          clusterId: new mongoose.Types.ObjectId(clusterId),
-          isActive: true 
-        } 
+        $match: matchCriteria
       },
       // Étape 2: Joindre la collection des membres pour récupérer les données du client
       {
@@ -308,6 +325,84 @@ export const removeClientFromCluster = async (req, res) => {
     return res.status(200).json({ message: 'Client retiré de l\'établissement avec succès' });
   } catch (error) {
     console.error('Erreur lors de la suppression du client:', error);
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+// Bannir un client dans un établissement spécifique
+export const banClient = async (req, res) => {
+  try {
+    const { relationId } = req.params;
+    const { reason } = req.body;
+    
+    if (!mongoose.Types.ObjectId.isValid(relationId)) {
+      return res.status(400).json({ message: 'ID de relation invalide' });
+    }
+
+    // Rechercher la relation client-cluster
+    const relation = await ClientClusterRelation.findById(relationId);
+    if (!relation) {
+      return res.status(404).json({ message: 'Relation client-cluster non trouvée' });
+    }
+
+    // Mettre à jour les préférences pour marquer le client comme banni
+    relation.preferences = {
+      ...relation.preferences,
+      banned: true,
+      banReason: reason || 'Aucune raison spécifiée',
+      bannedAt: new Date()
+    };
+
+    // Enregistrer les modifications
+    await relation.save();
+
+    return res.status(200).json({
+      message: 'Client banni avec succès',
+      relation: relation
+    });
+  } catch (error) {
+    console.error('Erreur lors du bannissement du client:', error);
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
+};
+
+// Débannir un client dans un établissement spécifique
+export const unbanClient = async (req, res) => {
+  try {
+    const { relationId } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(relationId)) {
+      return res.status(400).json({ message: 'ID de relation invalide' });
+    }
+
+    // Rechercher la relation client-cluster
+    const relation = await ClientClusterRelation.findById(relationId);
+    if (!relation) {
+      return res.status(404).json({ message: 'Relation client-cluster non trouvée' });
+    }
+
+    // Vérifier si le client est banni
+    if (!relation.preferences?.banned) {
+      return res.status(400).json({ message: 'Ce client n\'est pas banni' });
+    }
+
+    // Mettre à jour les préférences pour débannir le client
+    relation.preferences = {
+      ...relation.preferences,
+      banned: false,
+      banReason: undefined,
+      bannedAt: undefined
+    };
+
+    // Enregistrer les modifications
+    await relation.save();
+
+    return res.status(200).json({
+      message: 'Client débanni avec succès',
+      relation: relation
+    });
+  } catch (error) {
+    console.error('Erreur lors du débannissement du client:', error);
     return res.status(500).json({ message: 'Erreur serveur' });
   }
 }; 

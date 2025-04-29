@@ -22,7 +22,13 @@ const clientClusterRelationSchema = new mongoose.Schema(
         ref: 'Staff'
       }],
       preferredTreatments: [String],
-      notes: String
+      notes: String,
+      banned: {
+        type: Boolean,
+        default: false
+      },
+      banReason: String,
+      bannedAt: Date
     },
     lastVisit: {
       type: Date,
@@ -38,6 +44,8 @@ clientClusterRelationSchema.index({ clientId: 1, clusterId: 1 }, { unique: true 
 clientClusterRelationSchema.index({ clusterId: 1 });
 // Index pour rechercher toutes les relations d'un client
 clientClusterRelationSchema.index({ clientId: 1 });
+// Index pour rechercher rapidement les clients bannis d'un cluster
+clientClusterRelationSchema.index({ clusterId: 1, 'preferences.banned': 1 });
 
 const ClientClusterRelation = mongoose.model('ClientClusterRelation', clientClusterRelationSchema);
 
