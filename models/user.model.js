@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
+const { Schema } = mongoose;
 
 // Schéma pour les heures de travail
-const workHoursSchema = new mongoose.Schema({
+const workHoursSchema = new Schema({
   day: {
     type: String,
     enum: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
@@ -22,7 +23,7 @@ const workHoursSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
-const userSchema = new mongoose.Schema({
+const userSchema = new Schema({
   email: {
     type: String,
     required: true,
@@ -54,7 +55,7 @@ const userSchema = new mongoose.Schema({
     default: 'employee'
   },
   cluster: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'Cluster',
     required: true
   },
@@ -107,7 +108,7 @@ const userSchema = new mongoose.Schema({
   },
   // Spécialités du coiffeur (références aux services du cluster)
   specialties: [{
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'Service'
   }],
   // Autres champs existants
@@ -117,7 +118,7 @@ const userSchema = new mongoose.Schema({
   resetPasswordToken: String,
   resetPasswordExpires: Date,
   createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'User'
   }
 }, {

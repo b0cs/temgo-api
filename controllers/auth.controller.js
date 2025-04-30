@@ -4,7 +4,7 @@ import Member from '../models/member.model.js';
 import ClientClusterRelation from '../models/ClientClusterRelation.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 

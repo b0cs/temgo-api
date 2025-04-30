@@ -5,7 +5,7 @@ import Cluster from '../models/cluster.model.js';
 import Member from '../models/member.model.js';
 import Service from '../models/service.model.js';
 import Appointment from '../models/appointment.model.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
