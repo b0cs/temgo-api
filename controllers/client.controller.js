@@ -16,215 +16,66 @@ export const getClientsByCluster = async (req, res) => {
     }
 
     console.time('getClientsByCluster');
-    let relations = [];
 
-    // Si on cherche spécifiquement les clients bannis, utiliser une approche complète
-    if (includeBanned === 'true') {
-      console.log('🔍 Mode: Affichage des clients bannis uniquement - Approche complète');
-      
-      // Recherche des clients bannis via pipeline d'agrégation optimisé
-      const bannedClientsAggregate = [
-        {
-          $match: {
-            clusterId: new mongoose.Types.ObjectId(clusterId)
-          }
+    // Approche simplifiée pour récupérer TOUS les clients avec ce cluster ID
+    const members = await Member.find({
+      cluster: new mongoose.Types.ObjectId(clusterId),
+      role: 'client'
+    }).lean();
+    
+    console.log(`✅ Trouvé ${members.length} clients directement associés au cluster dans la collection members`);
+    
+    // Formatter les clients pour la réponse
+    const formattedClients = members.map(member => {
+      // Créer un format de réponse cohérent
+      return {
+        _id: `client_${member._id}`,
+        clientId: member._id,
+        clusterId: clusterId,
+        isActive: member.status !== 'banned' && member.status !== 'deleted',
+        joinedAt: member.createdAt || new Date(),
+        lastVisit: null,
+        totalSpent: 0,
+        visitsCount: 0,
+        preferences: { 
+          banned: member.status === 'banned',
+          deleted: member.status === 'deleted'
         },
-        {
-          $lookup: {
-            from: 'members',
-            localField: 'clientId',
-            foreignField: '_id',
-            as: 'clientInfo'
-          }
-        },
-        {
-          $unwind: {
-            path: '$clientInfo',
-            preserveNullAndEmptyArrays: true
-          }
-        },
-        {
-          $match: {
-            $or: [
-              { 'clientInfo.status': 'banned' },                 // Client banni via status dans membre
-              { isActive: false, 'preferences.banned': true }    // Client banni via preferences dans relation
-            ]
-          }
-        },
-        {
-          $project: {
-            _id: 1,
-            clientId: 1,
-            clusterId: 1,
-            joinedAt: 1,
-            lastVisit: 1,
-            totalSpent: 1,
-            visitsCount: 1,
-            preferences: 1,
-            favoriteServices: 1,
-            isActive: 1,
-            'clientInfo._id': 1,
-            'clientInfo.firstName': 1,
-            'clientInfo.lastName': 1,
-            'clientInfo.email': 1,
-            'clientInfo.phone': 1,
-            'clientInfo.status': 1
-          }
+        favoriteServices: [],
+        clientInfo: {
+          _id: member._id,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          email: member.email,
+          phone: member.phone,
+          status: member.status,
+          deletedAt: member.deletedAt,
+          anonymizedData: member.anonymizedData
         }
-      ];
-
-      relations = await ClientClusterRelation.aggregate(bannedClientsAggregate);
-      console.log(`✅ Récupéré ${relations.length} clients bannis via pipeline d'agrégation`);
-      
-      // Recherche supplémentaire des clients bannis qui n'ont pas de relation
-      try {
-        // Rechercher les membres bannis qui n'ont pas de relation mais sont liés au cluster
-        const bannedMembersWithNoRelation = await Member.find({
-          cluster: new mongoose.Types.ObjectId(clusterId),
-          status: 'banned',
-          role: 'client'
-        }).lean();
-        
-        // Filtrer pour ne garder que ceux qui n'ont pas de relation
-        const existingClientIds = new Set(relations.map(rel => 
-          rel.clientId ? rel.clientId.toString() : null
-        ).filter(id => id !== null));
-        
-        const membersToAdd = bannedMembersWithNoRelation.filter(member => 
-          !existingClientIds.has(member._id.toString())
-        );
-        
-        console.log(`✅ Trouvé ${membersToAdd.length} clients bannis supplémentaires sans relation`);
-        
-        // Ajouter ces clients au format attendu
-        const formattedMembers = membersToAdd.map(member => ({
-          _id: `banned_${member._id}`,
-          clientId: member._id,
-          clusterId: new mongoose.Types.ObjectId(clusterId),
-          isActive: false,
-          joinedAt: member.createdAt || new Date(),
-          lastVisit: null,
-          totalSpent: 0,
-          visitsCount: 0,
-          preferences: { banned: true },
-          favoriteServices: [],
-          clientInfo: {
-            _id: member._id,
-            firstName: member.firstName,
-            lastName: member.lastName,
-            email: member.email,
-            phone: member.phone,
-            status: 'banned'
-          }
-        }));
-        
-        relations = [...relations, ...formattedMembers];
-        console.log(`✅ Total après fusion: ${relations.length} clients bannis`);
-        
-      } catch (error) {
-        console.error('⚠️ Erreur lors de la recherche des clients bannis sans relation:', error);
-      }
-      
-    } else {
-      // Critères de recherche standard pour les relations
-      const matchCriteria = { 
-        clusterId: new mongoose.Types.ObjectId(clusterId)
       };
-      
-      // Critères de filtrage pour les clients
-      const clientFilter = {};
-      
-      if (includeBanned === 'all') {
-        // Si on veut tous les clients, y compris les bannis
-        console.log('🔍 Mode: Affichage de tous les clients (actifs et bannis)');
-        // Pas de filtrage supplémentaire
-      } else {
-        // Par défaut, exclure les clients bannis
-        console.log('🔍 Mode: Affichage uniquement des clients actifs (non bannis)');
-        matchCriteria.isActive = true;
-        clientFilter['status'] = { $ne: 'banned' };
-      }
-      
-      console.log('🔍 Critères de filtrage pour les relations:', JSON.stringify(matchCriteria));
-      console.log('🔍 Critères de filtrage pour les clients:', JSON.stringify(clientFilter));
-      
-      // Construire le pipeline d'agrégation
-      const pipeline = [
-        // Étape 1: Filtrer selon les critères définis pour les relations
-        { 
-          $match: matchCriteria
-        },
-        // Étape 2: Joindre la collection des membres pour récupérer les données du client
-        {
-          $lookup: {
-            from: 'members',
-            localField: 'clientId',
-            foreignField: '_id',
-            as: 'clientInfo'
-          }
-        },
-        // Étape 3: Déstructurer le tableau clientInfo (un seul élément)
-        {
-          $unwind: {
-            path: '$clientInfo',
-            preserveNullAndEmptyArrays: true
-          }
-        }
-      ];
-      
-      // Ajouter le filtre sur les clients si nécessaire
-      if (Object.keys(clientFilter).length > 0) {
-        pipeline.push({
-          $match: {
-            'clientInfo.status': clientFilter.status
-          }
-        });
-      }
-      
-      // Projeter seulement les champs nécessaires
-      pipeline.push({
-        $project: {
-          _id: 1,
-          clientId: 1,
-          clusterId: 1,
-          joinedAt: 1,
-          lastVisit: 1,
-          totalSpent: 1,
-          visitsCount: 1,
-          preferences: 1,
-          favoriteServices: 1,
-          isActive: 1,
-          'clientInfo._id': 1,
-          'clientInfo.firstName': 1,
-          'clientInfo.lastName': 1,
-          'clientInfo.email': 1,
-          'clientInfo.phone': 1,
-          'clientInfo.status': 1
-        }
-      });
-      
-      console.log('🔍 Pipeline final:', JSON.stringify(pipeline));
-      
-      // Exécuter l'agrégation
-      relations = await ClientClusterRelation.aggregate(pipeline);
+    });
+    
+    // Si vous souhaitez filtrer selon le paramètre includeBanned
+    let filteredClients = formattedClients;
+    
+    if (includeBanned === 'true') {
+      // Ne garder que les clients bannis
+      filteredClients = formattedClients.filter(client => 
+        client.clientInfo.status === 'banned' || client.preferences.banned
+      );
+      console.log(`✅ Filtrage: ${filteredClients.length} clients bannis retenus`);
+    } else if (includeBanned !== 'all') {
+      // Exclure les clients bannis (comportement par défaut)
+      filteredClients = formattedClients.filter(client => 
+        client.clientInfo.status !== 'banned' && !client.preferences.banned
+      );
+      console.log(`✅ Filtrage: ${filteredClients.length} clients actifs retenus (non bannis)`);
     }
 
     console.timeEnd('getClientsByCluster');
-    console.log(`✅ Récupéré ${relations.length} clients`);
+    console.log(`✅ Récupéré au total ${filteredClients.length} clients`);
 
-    // Log de débogage pour vérifier les clients bannis
-    if ((includeBanned === 'true' || includeBanned === 'all') && relations.length > 0) {
-      console.log('🔍 Détails des clients récupérés:');
-      for (const client of relations) {
-        const isActiveStatus = client.isActive;
-        const bannedInPrefs = client.preferences?.banned === true;
-        const bannedInStatus = client.clientInfo?.status === 'banned';
-        console.log(`- Client ${client.clientInfo?.firstName} ${client.clientInfo?.lastName} (${client.clientInfo?._id}): ` +
-                   `isActive=${isActiveStatus}, banned dans preferences=${bannedInPrefs}, banned dans status=${bannedInStatus}`);
-      }
-    }
-
-    return res.status(200).json(relations);
+    return res.status(200).json(filteredClients);
   } catch (error) {
     console.error('❌ Erreur lors de la récupération des clients:', error);
     return res.status(500).json({ message: 'Erreur serveur', error: error.message });
