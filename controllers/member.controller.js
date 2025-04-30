@@ -225,73 +225,29 @@ export const createMember = async (req, res) => {
 }
 
 export const getMembersByCluster = async (req, res) => {
+  try {
     const { clusterId } = req.params;
-    const { status } = req.query;
     
-    console.log("🔍 Recherche de membres pour le cluster:", clusterId, "avec le statut:", status);
+    console.log(`🔍 Recherche des membres du cluster ${clusterId}`);
     
-    try {
-        // Vérifier d'abord si on doit utiliser les relations many-to-many
-        const relationsExist = await ClientClusterRelation.exists({ clusterId: clusterId });
-        
-        if (relationsExist) {
-            console.log("🔄 Utilisation des relations client-cluster (many-to-many)");
-            
-            // Chercher les relations pour ce cluster
-            const relations = await ClientClusterRelation.find({ clusterId: clusterId })
-                .populate({
-                    path: 'clientId',
-                    select: 'firstName lastName email phone status',
-                    match: status ? { status } : { status: { $nin: ['deleted', 'banned'] } } // Exclure les clients supprimés ET bannis par défaut
-                })
-                .sort({ updatedAt: -1 });
-            
-            // Filtrer les relations dont le client a été supprimé ou est null
-            const validRelations = relations.filter(relation => relation.clientId !== null);
-            
-            // Transformer la réponse pour inclure les informations du client directement
-            const formattedRelations = validRelations.map(relation => {
-                const client = relation.clientId;
-                return {
-                    _id: relation._id,
-                    clientId: relation.clientId._id,
-                    firstName: client.firstName,
-                    lastName: client.lastName,
-                    email: client.email,
-                    phone: client.phone,
-                    status: client.status,
-                    relationId: relation._id,
-                    joinedAt: relation.joinedAt,
-                    lastVisit: relation.lastVisit,
-                    totalSpent: relation.totalSpent,
-                    visitsCount: relation.visitsCount,
-                    preferences: relation.preferences || client.notes
-                };
-            });
-            
-            console.log(`✅ ${formattedRelations.length} clients trouvés via les relations`);
-            return res.status(200).json(formattedRelations);
-        }
-        
-        // Si aucune relation n'existe encore, utiliser l'ancien système
-        console.log("⚠️ Aucune relation client-cluster trouvée, utilisation de l'ancien système");
-        
-        const query = { cluster: clusterId };
-        if (status) {
-            query.status = status;
-        } else {
-            // Par défaut, ne pas inclure les clients supprimés ou bannis
-            query.status = { $nin: ['deleted', 'banned'] };
-        }
-        
-        const members = await Member.find(query);
-        console.log(`✅ ${members.length} membres trouvés (ancien système)`);
-        
-        res.status(200).json(members);
-    } catch (error) {
-        console.error("❌ Erreur lors de la recherche des membres:", error);
-        res.status(404).json({ message: error.message });
+    if (!mongoose.Types.ObjectId.isValid(clusterId)) {
+      return res.status(400).json({ message: 'ID de cluster invalide' });
     }
+    
+    // Requête simple pour récupérer TOUS les membres du cluster, y compris les bannis
+    // Ne pas filtrer sur le statut pour récupérer à la fois les membres actifs et bannis
+    const members = await Member.find({ 
+      cluster: clusterId,
+      role: 'client',
+    });
+    
+    console.log(`✅ ${members.length} membres trouvés pour le cluster ${clusterId}`);
+    
+    res.status(200).json(members);
+  } catch (error) {
+    console.error(`❌ Erreur lors de la récupération des membres: ${error.message}`);
+    res.status(500).json({ message: 'Erreur lors de la récupération des membres', error: error.message });
+  }
 };
 
 export const getMemberById = async (req, res) => {
