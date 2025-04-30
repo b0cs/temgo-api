@@ -516,6 +516,8 @@ export const getAllClientsByCluster = async (req, res) => {
       clusterId: new mongoose.Types.ObjectId(clusterId)
     }).populate('clientId', 'firstName lastName email phone status deletedAt anonymizedData');
 
+    console.log(`✅ Récupéré ${relations.length} relations clients du cluster`);
+
     // Formater les données pour la réponse
     const formattedClients = relations.map(relation => {
       // Vérifier si relation.clientId existe et n'est pas null
@@ -548,8 +550,116 @@ export const getAllClientsByCluster = async (req, res) => {
       };
     }).filter(client => client !== null); // Filtrer les relations sans clientId valide
 
-    console.timeEnd('getAllClientsByCluster');
-    console.log(`✅ Récupéré ${formattedClients.length} clients (sans filtrage)`);
+    // Récupérer également tous les clients dans la collection members avec status 'banned'
+    // qui appartiennent à ce cluster, même s'ils n'ont pas de relation active
+    try {
+      const bannedMembers = await Member.find({
+        cluster: new mongoose.Types.ObjectId(clusterId),
+        status: 'banned'
+      }).select('_id firstName lastName email phone status');
+      
+      console.log(`🔍 Trouvé ${bannedMembers.length} clients bannis dans la collection members`);
+      
+      if (bannedMembers.length > 0) {
+        // Créer une liste des IDs clients déjà dans les relations formatées
+        const existingClientIds = new Set(formattedClients.map(client => 
+          client.clientInfo._id.toString()
+        ));
+        
+        // Filtrer pour ne garder que les clients bannis qui ne sont pas déjà inclus
+        const newBannedClients = bannedMembers.filter(member => 
+          !existingClientIds.has(member._id.toString())
+        );
+        
+        console.log(`🔍 Ajout de ${newBannedClients.length} clients bannis supplémentaires`);
+        
+        // Convertir ces clients bannis au même format que les relations
+        const formattedBannedClients = newBannedClients.map(member => {
+          return {
+            _id: `banned_${member._id}`, // ID unique pour cette relation virtuelle
+            clientId: member._id,
+            clusterId: clusterId,
+            isActive: false,
+            joinedAt: member.createdAt || new Date(),
+            lastVisit: null,
+            totalSpent: 0,
+            visitsCount: 0,
+            preferences: { banned: true },
+            favoriteServices: [],
+            clientInfo: {
+              _id: member._id,
+              firstName: member.firstName,
+              lastName: member.lastName,
+              email: member.email,
+              phone: member.phone,
+              status: 'banned'
+            }
+          };
+        });
+        
+        // Ajouter ces clients bannis à la liste
+        formattedClients.push(...formattedBannedClients);
+      }
+    } catch (error) {
+      console.error('⚠️ Erreur lors de la récupération des clients bannis:', error);
+      // Ne pas bloquer l'opération principale si cette étape échoue
+    }
+
+    // Rechercher également les relations inactives (désactivées) qui peuvent contenir des clients bannis
+    try {
+      const inactiveRelations = await ClientClusterRelation.find({
+        clusterId: new mongoose.Types.ObjectId(clusterId),
+        isActive: false,
+        'preferences.banned': true
+      }).populate('clientId', 'firstName lastName email phone status');
+      
+      console.log(`🔍 Trouvé ${inactiveRelations.length} relations inactives avec clients bannis`);
+      
+      if (inactiveRelations.length > 0) {
+        // Créer une liste des IDs relations déjà dans les relations formatées
+        const existingRelationIds = new Set(formattedClients.map(client => 
+          client._id.toString()
+        ));
+        
+        // Filtrer pour ne garder que les relations qui ne sont pas déjà incluses
+        const newInactiveRelations = inactiveRelations.filter(relation => 
+          !existingRelationIds.has(relation._id.toString()) &&
+          relation.clientId !== null
+        );
+        
+        console.log(`🔍 Ajout de ${newInactiveRelations.length} relations inactives supplémentaires`);
+        
+        // Convertir ces relations au format standard
+        const formattedInactiveRelations = newInactiveRelations.map(relation => {
+          return {
+            _id: relation._id,
+            clientId: relation.clientId._id,
+            clusterId: relation.clusterId,
+            isActive: false,
+            joinedAt: relation.joinedAt,
+            lastVisit: relation.lastVisit,
+            totalSpent: relation.totalSpent,
+            visitsCount: relation.visitsCount,
+            preferences: relation.preferences,
+            favoriteServices: relation.favoriteServices,
+            clientInfo: {
+              _id: relation.clientId._id,
+              firstName: relation.clientId.firstName,
+              lastName: relation.clientId.lastName,
+              email: relation.clientId.email,
+              phone: relation.clientId.phone,
+              status: relation.clientId.status || 'banned'
+            }
+          };
+        });
+        
+        // Ajouter ces relations inactives à la liste
+        formattedClients.push(...formattedInactiveRelations);
+      }
+    } catch (error) {
+      console.error('⚠️ Erreur lors de la récupération des relations inactives:', error);
+      // Ne pas bloquer l'opération principale si cette étape échoue
+    }
 
     // Récupérer également les clients supprimés du cluster directement à partir de la collection members
     try {
@@ -588,9 +698,9 @@ export const getAllClientsByCluster = async (req, res) => {
         });
         
         // Ajouter ces clients supprimés à la liste, en évitant les doublons
-        const existingClientIds = new Set(formattedClients.map(client => client.clientId.toString()));
+        const existingClientIds = new Set(formattedClients.map(client => client.clientInfo._id.toString()));
         const uniqueDeletedClients = deletedClients.filter(client => 
-          !existingClientIds.has(client.clientId.toString())
+          !existingClientIds.has(client.clientInfo._id.toString())
         );
         
         if (uniqueDeletedClients.length > 0) {
@@ -602,6 +712,9 @@ export const getAllClientsByCluster = async (req, res) => {
       console.error('⚠️ Erreur lors de la récupération des clients supprimés:', memberError);
       // Ne pas bloquer l'opération principale si cette étape échoue
     }
+
+    console.timeEnd('getAllClientsByCluster');
+    console.log(`✅ Total final: ${formattedClients.length} clients (actifs, bannis et supprimés inclus)`);
 
     return res.status(200).json(formattedClients);
   } catch (error) {
