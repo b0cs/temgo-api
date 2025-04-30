@@ -514,10 +514,16 @@ export const getAllClientsByCluster = async (req, res) => {
     // Récupérer toutes les relations pour ce cluster, sans aucun filtrage
     const relations = await ClientClusterRelation.find({ 
       clusterId: new mongoose.Types.ObjectId(clusterId)
-    }).populate('clientId', 'firstName lastName email phone status');
+    }).populate('clientId', 'firstName lastName email phone status deletedAt anonymizedData');
 
     // Formater les données pour la réponse
     const formattedClients = relations.map(relation => {
+      // Vérifier si relation.clientId existe et n'est pas null
+      if (!relation.clientId) {
+        console.log('⚠️ Relation sans clientId valide trouvée:', relation._id);
+        return null;
+      }
+      
       return {
         _id: relation._id,
         clientId: relation.clientId._id,
@@ -535,13 +541,67 @@ export const getAllClientsByCluster = async (req, res) => {
           lastName: relation.clientId.lastName,
           email: relation.clientId.email,
           phone: relation.clientId.phone,
-          status: relation.clientId.status
+          status: relation.clientId.status,
+          deletedAt: relation.clientId.deletedAt,
+          anonymizedData: relation.clientId.anonymizedData
         }
       };
-    });
+    }).filter(client => client !== null); // Filtrer les relations sans clientId valide
 
     console.timeEnd('getAllClientsByCluster');
     console.log(`✅ Récupéré ${formattedClients.length} clients (sans filtrage)`);
+
+    // Récupérer également les clients supprimés du cluster directement à partir de la collection members
+    try {
+      const deletedMembers = await Member.find({
+        cluster: new mongoose.Types.ObjectId(clusterId),
+        status: 'deleted'
+      }).select('_id firstName lastName email phone status deletedAt anonymizedData');
+      
+      if (deletedMembers.length > 0) {
+        console.log(`🔍 Récupération directe de ${deletedMembers.length} clients supprimés supplémentaires`);
+        
+        // Convertir ces clients supprimés au même format que les relations
+        const deletedClients = deletedMembers.map(member => {
+          return {
+            _id: `deleted_${member._id}`, // Identifiant unique pour cette "relation"
+            clientId: member._id,
+            clusterId: clusterId,
+            isActive: false,
+            joinedAt: member.createdAt || new Date(),
+            lastVisit: null,
+            totalSpent: 0,
+            visitsCount: 0,
+            preferences: { deleted: true },
+            favoriteServices: [],
+            clientInfo: {
+              _id: member._id,
+              firstName: member.firstName,
+              lastName: member.lastName,
+              email: member.email,
+              phone: member.phone,
+              status: 'deleted',
+              deletedAt: member.deletedAt,
+              anonymizedData: member.anonymizedData
+            }
+          };
+        });
+        
+        // Ajouter ces clients supprimés à la liste, en évitant les doublons
+        const existingClientIds = new Set(formattedClients.map(client => client.clientId.toString()));
+        const uniqueDeletedClients = deletedClients.filter(client => 
+          !existingClientIds.has(client.clientId.toString())
+        );
+        
+        if (uniqueDeletedClients.length > 0) {
+          console.log(`✅ Ajout de ${uniqueDeletedClients.length} clients supprimés uniques à la réponse`);
+          formattedClients.push(...uniqueDeletedClients);
+        }
+      }
+    } catch (memberError) {
+      console.error('⚠️ Erreur lors de la récupération des clients supprimés:', memberError);
+      // Ne pas bloquer l'opération principale si cette étape échoue
+    }
 
     return res.status(200).json(formattedClients);
   } catch (error) {

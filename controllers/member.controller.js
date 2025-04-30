@@ -750,3 +750,45 @@ export const deleteMember = async (req, res) => {
     res.status(500).json({ message: 'Erreur lors de la suppression du client' });
   }
 };
+
+// Récupérer les clients supprimés d'un cluster
+export const getDeletedClientsByCluster = async (req, res) => {
+  try {
+    const { clusterId } = req.params;
+    
+    console.log('🔍 getDeletedClientsByCluster - Request params:', { clusterId });
+    
+    if (!mongoose.Types.ObjectId.isValid(clusterId)) {
+      return res.status(400).json({ message: 'ID d\'établissement invalide' });
+    }
+
+    console.time('getDeletedClientsByCluster');
+
+    // Récupérer les membres supprimés liés à ce cluster
+    const deletedMembers = await Member.find({
+      cluster: new mongoose.Types.ObjectId(clusterId),
+      status: 'deleted',
+      role: 'client'
+    }).select('_id firstName lastName email phone status deletedAt anonymizedData');
+
+    console.timeEnd('getDeletedClientsByCluster');
+    console.log(`✅ Récupéré ${deletedMembers.length} clients supprimés dans le cluster ${clusterId}`);
+
+    // Si nous avons trouvé des clients supprimés, les retourner
+    if (deletedMembers.length > 0) {
+      // Détails des clients supprimés pour débogage
+      deletedMembers.forEach(member => {
+        console.log(`- Client supprimé: ${member.firstName} ${member.lastName} (${member._id})`);
+        console.log(`  Email: ${member.email}, Tél: ${member.phone}`);
+        console.log(`  Supprimé le: ${member.deletedAt}`);
+      });
+    } else {
+      console.log('✅ Aucun client supprimé trouvé dans ce cluster');
+    }
+
+    return res.status(200).json(deletedMembers);
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des clients supprimés:', error);
+    return res.status(500).json({ message: 'Erreur serveur', error: error.message });
+  }
+};

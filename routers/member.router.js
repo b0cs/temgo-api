@@ -8,7 +8,8 @@ import {
     updateMemberSchedule,
     addMemberAbsence,
     getAllMembersByCluster,
-    deleteMember
+    deleteMember,
+    getDeletedClientsByCluster
 } from '../controllers/member.controller.js';
 import { authMiddleware } from '../middleware/auth.middleware.js';
 import Member from '../models/member.model.js';
@@ -29,6 +30,9 @@ memberRouter.get("/cluster/:clusterId", getMembersByCluster);
 
 // GET route for fetching members from all collections
 memberRouter.get("/all/:clusterId", getAllMembersByCluster);
+
+// GET route for fetching deleted clients by cluster
+memberRouter.get("/deleted/:clusterId", getDeletedClientsByCluster);
 
 // PUT route for updating a member's schedule
 memberRouter.put("/schedule/:memberId", updateMemberSchedule);
