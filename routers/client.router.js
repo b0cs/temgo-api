@@ -7,7 +7,8 @@ import {
   updateClientPreferences,
   removeClientFromCluster,
   banClient,
-  unbanClient
+  unbanClient,
+  getAllClientsByCluster
 } from '../controllers/client.controller.js';
 import { verifyToken, checkRole } from '../middleware/auth.middleware.js';
 import { updateClientStatusInCluster } from '../controllers/user.controller.js';
@@ -19,6 +20,8 @@ router.use(verifyToken);
 
 // Routes pour la gestion des clients
 router.get('/cluster/:clusterId', checkRole(['admin', 'manager', 'employee']), getClientsByCluster);
+// Nouvelle route pour récupérer tous les clients sans filtrage
+router.get('/all/:clusterId', checkRole(['admin', 'manager', 'employee']), getAllClientsByCluster);
 router.get('/relation/:relationId', checkRole(['admin', 'manager', 'employee']), getClientClusterRelation);
 router.get('/search', checkRole(['admin', 'manager', 'employee']), searchGlobalClients);
 router.post('/add/:clientId', checkRole(['admin', 'manager', 'employee']), addExistingClientToCluster);

@@ -496,4 +496,56 @@ export const unbanClient = async (req, res) => {
     console.error('Erreur lors du débannissement du client:', error);
     return res.status(500).json({ message: 'Erreur serveur' });
   }
+};
+
+// Récupérer tous les clients d'un établissement (méthode simplifiée)
+export const getAllClientsByCluster = async (req, res) => {
+  try {
+    const { clusterId } = req.params;
+    
+    console.log('🔍 getAllClientsByCluster - Request params:', { clusterId });
+    
+    if (!mongoose.Types.ObjectId.isValid(clusterId)) {
+      return res.status(400).json({ message: 'ID d\'établissement invalide' });
+    }
+
+    console.time('getAllClientsByCluster');
+
+    // Récupérer toutes les relations pour ce cluster, sans aucun filtrage
+    const relations = await ClientClusterRelation.find({ 
+      clusterId: new mongoose.Types.ObjectId(clusterId)
+    }).populate('clientId', 'firstName lastName email phone status');
+
+    // Formater les données pour la réponse
+    const formattedClients = relations.map(relation => {
+      return {
+        _id: relation._id,
+        clientId: relation.clientId._id,
+        clusterId: relation.clusterId,
+        isActive: relation.isActive,
+        joinedAt: relation.joinedAt,
+        lastVisit: relation.lastVisit,
+        totalSpent: relation.totalSpent,
+        visitsCount: relation.visitsCount,
+        preferences: relation.preferences,
+        favoriteServices: relation.favoriteServices,
+        clientInfo: {
+          _id: relation.clientId._id,
+          firstName: relation.clientId.firstName,
+          lastName: relation.clientId.lastName,
+          email: relation.clientId.email,
+          phone: relation.clientId.phone,
+          status: relation.clientId.status
+        }
+      };
+    });
+
+    console.timeEnd('getAllClientsByCluster');
+    console.log(`✅ Récupéré ${formattedClients.length} clients (sans filtrage)`);
+
+    return res.status(200).json(formattedClients);
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des clients:', error);
+    return res.status(500).json({ message: 'Erreur serveur', error: error.message });
+  }
 }; 
