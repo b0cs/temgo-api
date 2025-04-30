@@ -8,7 +8,8 @@ import {
   removeClientFromCluster,
   banClient,
   unbanClient,
-  getAllClientsByCluster
+  getAllClientsByCluster,
+  changeClientStatus
 } from '../controllers/client.controller.js';
 import { verifyToken, checkRole } from '../middleware/auth.middleware.js';
 import { updateClientStatusInCluster } from '../controllers/user.controller.js';
@@ -30,6 +31,9 @@ router.delete('/relation/:relationId', checkRole(['admin', 'manager', 'employee'
 
 // Mettre à jour le statut d'un client dans un établissement spécifique (bannir, activer, supprimer)
 router.put('/:clientId/cluster/:clusterId/status', updateClientStatusInCluster);
+
+// Route spécifique pour changer le statut d'un client (réactiver ou bannir)
+router.put('/:clientId/cluster/:clusterId/change-status', checkRole(['admin', 'manager']), changeClientStatus);
 
 // Bannir un client dans un établissement
 router.post('/relation/:relationId/ban', checkRole(['admin', 'manager']), banClient);

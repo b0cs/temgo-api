@@ -676,4 +676,124 @@ export const getAllClientsByCluster = async (req, res) => {
     console.error('❌ Erreur lors de la récupération des clients:', error);
     return res.status(500).json({ message: 'Erreur serveur', error: error.message });
   }
+};
+
+// Méthode pour changer le statut d'un client (banned -> active)
+export const changeClientStatus = async (req, res) => {
+  try {
+    const { clientId, clusterId } = req.params;
+    const { status } = req.body;
+    
+    console.log(`🔄 Changement du statut du client ${clientId} vers ${status} pour le cluster ${clusterId}`);
+    
+    if (!mongoose.Types.ObjectId.isValid(clientId) || !mongoose.Types.ObjectId.isValid(clusterId)) {
+      return res.status(400).json({ message: 'ID invalide' });
+    }
+    
+    if (!status || (status !== 'active' && status !== 'banned')) {
+      return res.status(400).json({ message: 'Statut invalide. Valeurs acceptées: active, banned' });
+    }
+    
+    // Vérifier si le client existe
+    const client = await Member.findById(clientId);
+    if (!client) {
+      return res.status(404).json({ message: 'Client introuvable' });
+    }
+    
+    // Trouver la relation client-cluster
+    const relation = await ClientClusterRelation.findOne({
+      clientId,
+      clusterId
+    });
+    
+    if (!relation) {
+      return res.status(404).json({ message: 'Relation client-cluster introuvable' });
+    }
+    
+    // Réactiver le client
+    if (status === 'active') {
+      if (client.status === 'banned') {
+        // Mettre à jour le statut du client si banni globalement
+        client.status = 'active';
+        await client.save();
+      }
+      
+      // Mettre à jour la relation (isActive et preferences.banned)
+      relation.isActive = true;
+      if (!relation.preferences) {
+        relation.preferences = {};
+      }
+      relation.preferences.banned = false;
+      await relation.save();
+      
+      console.log(`✅ Client ${clientId} réactivé avec succès`);
+      return res.status(200).json({ 
+        message: 'Client réactivé avec succès',
+        client: {
+          _id: client._id,
+          firstName: client.firstName,
+          lastName: client.lastName,
+          status: client.status
+        },
+        relation: {
+          _id: relation._id,
+          isActive: relation.isActive,
+          preferences: relation.preferences
+        }
+      });
+    } 
+    // Bannir le client
+    else if (status === 'banned') {
+      // Vérifier les rendez-vous à venir avant de bannir
+      const futureAppointments = await Appointment.find({
+        member: clientId,
+        cluster: clusterId,
+        startTime: { $gte: new Date() },
+        status: { $nin: ['cancelled', 'completed'] }
+      }).populate('service', 'name');
+      
+      if (futureAppointments.length > 0) {
+        console.log(`⚠️ Impossible de bannir le client car il a ${futureAppointments.length} rendez-vous à venir`);
+        return res.status(400).json({
+          message: 'Impossible de bannir ce client car il a des rendez-vous à venir',
+          appointments: futureAppointments.map(app => ({
+            id: app._id,
+            date: app.startTime,
+            service: app.service ? app.service.name : 'Service inconnu'
+          }))
+        });
+      }
+      
+      // Mettre à jour le statut du client
+      client.status = 'banned';
+      await client.save();
+      
+      // Mettre à jour la relation
+      relation.isActive = false;
+      if (!relation.preferences) {
+        relation.preferences = {};
+      }
+      relation.preferences.banned = true;
+      await relation.save();
+      
+      console.log(`✅ Client ${clientId} banni avec succès`);
+      return res.status(200).json({ 
+        message: 'Client banni avec succès',
+        client: {
+          _id: client._id,
+          firstName: client.firstName,
+          lastName: client.lastName,
+          status: client.status
+        },
+        relation: {
+          _id: relation._id,
+          isActive: relation.isActive,
+          preferences: relation.preferences
+        }
+      });
+    }
+  } catch (error) {
+    console.error(`❌ Erreur lors du changement de statut du client: ${error.message}`);
+    res.status(500).json({ message: 'Erreur serveur', error: error.message });
+  }
 }; 
