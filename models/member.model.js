@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 const { Schema } = mongoose;
 
 // Schéma pour gérer les horaires journaliers des membres
