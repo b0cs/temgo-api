@@ -1,7 +1,7 @@
 {
-  "name": "poc",
+  "name": "temgo-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend API for TEMGO",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -14,30 +14,40 @@
     "inspect-data": "node scripts/inspect-data.js",
     "recreate-appointments": "node scripts/recreate-appointments.js",
     "test-api": "node scripts/test-api.js",
-    "migrate:client-relations": "node scripts/migrateClientRelations.js"
+    "migrate:client-relations": "node scripts/migrateClientRelations.js",
+    "check-appointments": "node scripts/check-appointments.js",
+    "create-test-appointment": "node scripts/create-test-appointment.js",
+    "fix-clients": "node scripts/fix-clients.js"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "TEMGO",
+  "license": "UNLICENSED",
   "dependencies": {
-    "axios": "^1.8.4",
-    "bcrypt": "^5.1.1",
-    "cloudinary": "^1.41.0",
+    "@aws-sdk/client-s3": "^3.436.0",
+    "@aws-sdk/s3-request-presigner": "^3.436.0",
+    "aws-sdk": "^2.1490.0",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "csv-writer": "^1.6.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.3.1",
     "exceljs": "^4.4.0",
-    "express": "^4.19.2",
+    "express": "^4.18.2",
     "get-intrinsic": "^1.3.0",
     "get-proto": "^1.0.1",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.3.1",
-    "multer": "^1.4.5-lts.2",
+    "mongoose": "^7.5.3",
+    "multer": "^1.4.5-lts.1",
     "multer-storage-cloudinary": "^4.0.0",
-    "nodemailer": "^6.10.1",
-    "nodemon": "^3.1.0",
+    "nodemailer": "^6.9.5",
+    "nodemon": "^3.0.1",
     "sharp": "^0.34.1",
     "side-channel": "^1.1.0",
-    "uuid": "^11.1.0"
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }

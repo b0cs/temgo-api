@@ -22,11 +22,6 @@ export const getClientsByCluster = async (req, res) => {
       clusterId: new mongoose.Types.ObjectId(clusterId)
     };
 
-    // Pour afficher les clients actifs par défaut
-    if (includeBanned !== 'true' && includeBanned !== 'all') {
-      matchCriteria.isActive = true;
-    }
-
     // Critères de filtrage pour les clients
     const clientFilter = {};
 
@@ -34,7 +29,8 @@ export const getClientsByCluster = async (req, res) => {
     if (includeBanned === 'true') {
       // Si on veut uniquement les clients bannis
       console.log('🔍 Mode: Affichage uniquement des clients bannis');
-      // Ne pas ajouter de filtre isActive pour voir aussi les relations inactives (clients bannis)
+      // Chercher les relations inactives (clients bannis)
+      matchCriteria.isActive = false;
     } else if (includeBanned === 'all') {
       // Si on veut tous les clients, y compris les bannis
       console.log('🔍 Mode: Affichage de tous les clients (actifs et bannis)');
@@ -42,7 +38,7 @@ export const getClientsByCluster = async (req, res) => {
     } else {
       // Par défaut, exclure les clients bannis
       console.log('🔍 Mode: Affichage uniquement des clients actifs (non bannis)');
-      matchCriteria['preferences.banned'] = { $ne: true };
+      matchCriteria.isActive = true;
       clientFilter['status'] = { $ne: 'banned' };
     }
 
@@ -82,18 +78,6 @@ export const getClientsByCluster = async (req, res) => {
       });
     }
 
-    // Si on veut uniquement les clients bannis, ajouter un filtre spécifique
-    if (includeBanned === 'true') {
-      pipeline.push({
-        $match: {
-          $or: [
-            { 'preferences.banned': true },
-            { 'clientInfo.status': 'banned' }
-          ]
-        }
-      });
-    }
-
     // Projeter seulement les champs nécessaires
     pipeline.push({
       $project: {
@@ -125,13 +109,14 @@ export const getClientsByCluster = async (req, res) => {
     console.log(`✅ Récupéré ${relations.length} clients`);
 
     // Log de débogage pour vérifier les clients bannis
-    if (includeBanned === 'true') {
-      console.log('🔍 Détails des clients bannis:');
+    if (includeBanned === 'true' || includeBanned === 'all') {
+      console.log('🔍 Détails des clients récupérés:');
       for (const client of relations) {
+        const isActiveStatus = client.isActive;
         const bannedInPrefs = client.preferences?.banned === true;
         const bannedInStatus = client.clientInfo?.status === 'banned';
         console.log(`- Client ${client.clientInfo?.firstName} ${client.clientInfo?.lastName}: ` +
-                   `banned dans preferences=${bannedInPrefs}, banned dans status=${bannedInStatus}`);
+                   `isActive=${isActiveStatus}, banned dans preferences=${bannedInPrefs}, banned dans status=${bannedInStatus}`);
       }
     }
 

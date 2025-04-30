@@ -873,6 +873,8 @@ export const getAppointmentsBulk = async (req, res) => {
   try {
     const { clientIds, clusterId } = req.query;
     
+    console.log('🔍 Requête getAppointmentsBulk avec params:', { clientIds, clusterId });
+    
     if (!clientIds || !clusterId) {
       return res.status(400).json({ message: 'Les IDs clients et l\'ID du cluster sont requis' });
     }
@@ -884,44 +886,112 @@ export const getAppointmentsBulk = async (req, res) => {
     
     // Convertir la liste des IDs clients en array
     const clientIdsArray = clientIds.split(',');
+    console.log('🔍 IDs clients à rechercher:', clientIdsArray);
     
     // Vérifier que les IDs clients sont valides
     const invalidIds = clientIdsArray.filter(id => !mongoose.Types.ObjectId.isValid(id));
     if (invalidIds.length > 0) {
+      console.log('⚠️ IDs clients invalides détectés:', invalidIds);
       return res.status(400).json({ 
         message: 'Certains IDs clients sont invalides',
         invalidIds 
       });
     }
     
+    // Vérifier si les clients existent réellement dans la base de données
+    console.log('🔍 Vérification de l\'existence des clients...');
+    const clientsExist = await mongoose.model('Member').find({ 
+      _id: { $in: clientIdsArray.map(id => new mongoose.Types.ObjectId(id)) }
+    });
+    
+    console.log(`🔍 ${clientsExist.length}/${clientIdsArray.length} clients trouvés en base de données`);
+    
+    // Si des clients ne sont pas trouvés, les signaler
+    if (clientsExist.length < clientIdsArray.length) {
+      const foundIds = clientsExist.map(c => c._id.toString());
+      const missingIds = clientIdsArray.filter(id => !foundIds.includes(id));
+      console.log('⚠️ Clients introuvables:', missingIds);
+    }
+    
     // Créer un objet pour stocker les résultats
     const result = {};
     
-    // Récupérer les rendez-vous pour tous les clients en une seule requête
-    const appointments = await Appointment.find({
-      member: { $in: clientIdsArray },
-      cluster: clusterId
-    })
-    .populate('service')
-    .populate('employee')
-    .sort({ startTime: -1 });
+    // Initialiser le résultat avec un array vide pour chaque client, même sans rendez-vous
+    for (const clientId of clientIdsArray) {
+      result[clientId] = [];
+    }
     
-    console.log(`Récupération de ${appointments.length} rendez-vous pour ${clientIdsArray.length} clients`);
+    // Construire la requête avec les IDs convertis en ObjectId
+    const query = {
+      member: { $in: clientIdsArray.map(id => new mongoose.Types.ObjectId(id)) },
+      cluster: new mongoose.Types.ObjectId(clusterId)
+    };
+    
+    console.log('🔍 Requête de recherche des rendez-vous:', JSON.stringify(query));
+    
+    // Récupérer les rendez-vous pour tous les clients en une seule requête
+    const appointments = await Appointment.find(query)
+      .populate('service', 'name description price duration color')
+      .populate('employee', 'firstName lastName role')
+      .sort({ startTime: -1 });
+    
+    console.log(`✅ Récupération de ${appointments.length} rendez-vous pour ${clientIdsArray.length} clients`);
+    
+    // Si aucun rendez-vous n'est trouvé, faire des vérifications supplémentaires
+    if (appointments.length === 0) {
+      console.log('🔍 Vérification des rendez-vous sans filtre de cluster...');
+      const allAppointments = await Appointment.find({
+        member: { $in: clientIdsArray.map(id => new mongoose.Types.ObjectId(id)) }
+      }).limit(10);
+      
+      if (allAppointments.length > 0) {
+        console.log(`⚠️ ${allAppointments.length} rendez-vous trouvés pour ces clients mais dans d'autres clusters`);
+        
+        // Afficher les IDs de cluster différents
+        const otherClusters = [...new Set(allAppointments.map(a => a.cluster.toString()))];
+        console.log('⚠️ Clusters différents détectés:', otherClusters);
+        
+        // Suggérer d'éventuels problèmes de format d'ID
+        if (!otherClusters.includes(clusterId)) {
+          console.log(`⚠️ ID de cluster ${clusterId} ne correspond à aucun des clusters trouvés ${otherClusters}`);
+        }
+      } else {
+        console.log('⚠️ Aucun rendez-vous trouvé pour ces clients, même sans filtre de cluster');
+      }
+      
+      // Vérifier également s'il y a des rendez-vous pour ce cluster
+      console.log('🔍 Vérification des rendez-vous pour ce cluster sans filtre client...');
+      const clusterAppointments = await Appointment.find({
+        cluster: new mongoose.Types.ObjectId(clusterId)
+      }).limit(5);
+      
+      if (clusterAppointments.length > 0) {
+        console.log(`⚠️ ${clusterAppointments.length} rendez-vous trouvés pour ce cluster avec d'autres clients`);
+        console.log('⚠️ Exemple de client IDs:', clusterAppointments.map(a => a.member.toString()));
+      } else {
+        console.log('⚠️ Aucun rendez-vous trouvé pour ce cluster, vérifier s\'il en existe dans la base de données');
+        
+        const anyAppointments = await Appointment.countDocuments();
+        console.log(`⚠️ Nombre total de rendez-vous en base: ${anyAppointments}`);
+      }
+      
+      // Retourner un objet de résultat avec des arrays vides pour chaque client
+      return res.status(200).json(result);
+    }
     
     // Organiser les rendez-vous par client
     for (const appointment of appointments) {
       const clientId = appointment.member.toString();
-      
-      if (!result[clientId]) {
-        result[clientId] = [];
-      }
-      
       result[clientId].push(appointment);
     }
     
+    console.log('✅ Fin du traitement, envoi de la réponse');
     return res.status(200).json(result);
   } catch (error) {
-    console.error('Erreur lors de la récupération des rendez-vous en masse:', error);
-    return res.status(500).json({ message: 'Erreur serveur lors de la récupération des rendez-vous' });
+    console.error('❌ Erreur lors de la récupération des rendez-vous en masse:', error);
+    return res.status(500).json({ 
+      message: 'Erreur serveur lors de la récupération des rendez-vous',
+      error: error.toString() 
+    });
   }
 };
